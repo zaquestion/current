@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package current;
+
+import "google/api/annotations.proto";
+
+service current {
+  rpc PostLocationFromBigBrother (PostLocationFromBigBrotherRequest) returns (PostLocationFromBigBrotherReply) {
+    option (google.api.http) = {
+      post: "/location/bigbrother"
+    };
+  }
+
+
+  rpc GetLocation (GetLocationRequest) returns (GetLocationReply) {
+    option (google.api.http) = {
+      get: "/location"
+    };
+  }
+}
+
+message PostLocationFromBigBrotherRequest {
+  int64 lat = 1;
+  int64 lon = 2;
+}
+
+message PostLocationFromBigBrotherReply {
+  string err = 2;
+}
+
+message GetLocationRequest {
+}
+
+message GetLocationReply {
+  int64 lat = 1;
+  int64 lon = 2;
+  string err = 3;
+}
