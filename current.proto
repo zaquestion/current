@@ -4,10 +4,10 @@ package current;
 
 import "google/api/annotations.proto";
 
-service current {
+service CurrentService {
   rpc PostLocationFromBigBrother (PostLocationFromBigBrotherRequest) returns (PostLocationFromBigBrotherReply) {
     option (google.api.http) = {
-      post: "/location/bigbrother"
+      get: "/location/bigbrother"
     };
   }
 
@@ -20,8 +20,12 @@ service current {
 }
 
 message PostLocationFromBigBrotherRequest {
-  int64 lat = 1;
-  int64 lon = 2;
+  double latitude = 1;
+  double longitude = 2;
+  double accuracy = 3;
+  double altitude = 4;
+  double bearing = 5;
+  double speed = 6;
 }
 
 message PostLocationFromBigBrotherReply {
@@ -32,7 +36,7 @@ message GetLocationRequest {
 }
 
 message GetLocationReply {
-  int64 lat = 1;
-  int64 lon = 2;
+  int64 latitude = 1;
+  int64 longitude = 2;
   string err = 3;
 }
