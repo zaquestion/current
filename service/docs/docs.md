@@ -119,8 +119,8 @@ th:nth-child(4) {
 
 | Name | Type | Field Number | Description|
 | ---- | ---- | ------------ | -----------|
-| latitude | TYPE_INT64 | 1 |  |
-| longitude | TYPE_INT64 | 2 |  |
+| latitude | TYPE_DOUBLE | 1 |  |
+| longitude | TYPE_DOUBLE | 2 |  |
 | err | TYPE_STRING | 3 |  |
 
 ### Services

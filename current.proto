@@ -36,7 +36,7 @@ message GetLocationRequest {
 }
 
 message GetLocationReply {
-  int64 latitude = 1;
-  int64 longitude = 2;
+  double latitude = 1;
+  double longitude = 2;
   string err = 3;
 }
