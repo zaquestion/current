@@ -38,7 +38,7 @@ import (
 func main() {
 	var (
 		debugAddr = flag.String("debug.addr", ":8080", "Debug and metrics listen address")
-		httpAddr  = flag.String("http.addr", ":8081", "HTTP listen address")
+		httpAddr  = flag.String("httpaddr", ":8081", "HTTP listen address")
 		grpcAddr  = flag.String("grpc.addr", ":8082", "gRPC (HTTP) listen address")
 		//zipkinAddr     = flag.String("zipkin.addr", "", "Enable Zipkin tracing via a Kafka server host:port")
 		//appdashAddr    = flag.String("appdash.addr", "", "Enable Appdash tracing via an Appdash server host:port")

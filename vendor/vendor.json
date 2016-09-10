@@ -1,6 +1,10 @@
 {
 	"comment": "",
 	"ignore": "test",
+	"heroku": {
+		"install" : [ "./service/DONOTEDIT/cmd/current/" ],
+		"goVersion": "go1.7.1"
+	},
 	"package": [
 		{
 			"checksumSHA1": "CYue5EOoWN/NWzIumxkDg77opPE=",
