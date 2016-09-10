@@ -1,1 +1,1 @@
-web: current -http.addr :$PORT && bigbrother_proxy
+web: current -http.addr :$PORT
