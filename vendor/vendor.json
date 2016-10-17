@@ -1,10 +1,12 @@
 {
 	"comment": "",
-	"ignore": "test",
 	"heroku": {
-		"install" : [ "./service/DONOTEDIT/cmd/current/" ],
-		"goVersion": "go1.7.1"
+		"goVersion": "go1.7.1",
+		"install": [
+			"./current-service/current-server/"
+		]
 	},
+	"ignore": "test",
 	"package": [
 		{
 			"checksumSHA1": "CYue5EOoWN/NWzIumxkDg77opPE=",
@@ -125,6 +127,12 @@
 			"path": "github.com/golang/protobuf/protoc-gen-go/descriptor",
 			"revision": "1f49d83d9aa00e6ce4fc8258c71cc7786aec968a",
 			"revisionTime": "2016-08-24T20:12:15Z"
+		},
+		{
+			"checksumSHA1": "ynJSWoF6v+3zMnh9R0QmmG6iGV8=",
+			"path": "github.com/pkg/errors",
+			"revision": "839d9e913e063e28dfd0e6c7b7512793e0a48be9",
+			"revisionTime": "2016-10-02T05:25:12Z"
 		},
 		{
 			"checksumSHA1": "EAlFmrrRD0+TZsXFX+o36vV+5SM=",

@@ -1,1 +1,1 @@
-web: current -httpaddr ":$PORT"
+web: current-server -http.addr ":$PORT"

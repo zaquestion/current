@@ -20,23 +20,27 @@ service CurrentService {
 }
 
 message PostLocationFromBigBrotherRequest {
-  double latitude = 1;
+  double latitude  = 1;
   double longitude = 2;
-  double accuracy = 3;
-  double altitude = 4;
-  double bearing = 5;
-  double speed = 6;
+  double accuracy  = 3;
+  double altitude  = 4;
+  double bearing   = 5;
+  double speed     = 6;
+  int32  battlevel = 7;
+  string time      = 8;
 }
 
 message PostLocationFromBigBrotherReply {
-  string err = 2;
+  string err = 1;
 }
 
 message GetLocationRequest {
 }
 
 message GetLocationReply {
-  double latitude = 1;
-  double longitude = 2;
-  string err = 3;
+  double latitude          = 1;
+  double longitude         = 2;
+  int32  battery_remaining = 3;
+  string last_updated      = 4;
+  string err               = 5;
 }
