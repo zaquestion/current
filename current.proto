@@ -36,8 +36,10 @@ message PostLocationBigBrotherRequest {
 
 message PostLocationTaskerRequest {
   repeated double location = 1;
-  int32  battery = 2;
-  string time    = 3;
+  double speed    = 2;
+  int32  battery  = 3;
+  bool   charging = 4;
+  string time     = 5;
 }
 
 message Error {
@@ -50,7 +52,9 @@ message GetLocationRequest {
 message Location {
   double latitude          = 1;
   double longitude         = 2;
-  int32  battery_remaining = 3;
-  string last_updated      = 4;
-  string err               = 5;
+  double speed             = 3;
+  int32  battery           = 4;
+  bool   charging          = 5;
+  string last_updated      = 6;
+  string err               = 7;
 }

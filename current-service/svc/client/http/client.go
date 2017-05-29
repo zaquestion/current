@@ -277,7 +277,11 @@ func EncodeHTTPPostLocationTaskerZeroRequest(_ context.Context, r *http.Request,
 
 	toRet.Location = req.Location
 
+	toRet.Speed = req.Speed
+
 	toRet.Battery = req.Battery
+
+	toRet.Charging = req.Charging
 
 	toRet.Time = req.Time
 

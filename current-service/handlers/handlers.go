@@ -20,10 +20,11 @@ type currentService struct{}
 // PostLocationBigBrother implements Service.
 func (s currentService) PostLocationBigBrother(ctx context.Context, in *pb.PostLocationBigBrotherRequest) (*pb.Error, error) {
 	loc := pb.Location{
-		Latitude:         in.Latitude,
-		Longitude:        in.Longitude,
-		LastUpdated:      in.Time,
-		BatteryRemaining: in.Battlevel,
+		Latitude:    in.Latitude,
+		Longitude:   in.Longitude,
+		Speed:       in.Speed,
+		LastUpdated: in.Time,
+		Battery:     in.Battlevel,
 	}
 	err := internal.PutLocation(loc)
 	response := pb.Error{}
@@ -42,10 +43,12 @@ func (s currentService) PostLocationTasker(ctx context.Context, in *pb.PostLocat
 		return &response, err
 	}
 	loc := pb.Location{
-		Latitude:         in.Location[0],
-		Longitude:        in.Location[1],
-		LastUpdated:      in.Time,
-		BatteryRemaining: in.Battery,
+		Latitude:    in.Location[0],
+		Longitude:   in.Location[1],
+		Charging:    in.Charging,
+		Speed:       in.Speed,
+		LastUpdated: in.Time,
+		Battery:     in.Battery,
 	}
 	err := internal.PutLocation(loc)
 	if err != nil {

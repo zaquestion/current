@@ -26,10 +26,12 @@ func PostLocationBigBrother(LatitudePostLocationBigBrother float64, LongitudePos
 }
 
 // PostLocationTasker implements Service.
-func PostLocationTasker(LocationPostLocationTasker []float64, BatteryPostLocationTasker int32, TimePostLocationTasker string) (*pb.PostLocationTaskerRequest, error) {
+func PostLocationTasker(LocationPostLocationTasker []float64, SpeedPostLocationTasker float64, BatteryPostLocationTasker int32, ChargingPostLocationTasker bool, TimePostLocationTasker string) (*pb.PostLocationTaskerRequest, error) {
 	request := pb.PostLocationTaskerRequest{
 		Location: LocationPostLocationTasker,
+		Speed:    SpeedPostLocationTasker,
 		Battery:  BatteryPostLocationTasker,
+		Charging: ChargingPostLocationTasker,
 		Time:     TimePostLocationTasker,
 	}
 	return &request, nil

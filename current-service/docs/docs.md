@@ -26,8 +26,10 @@
 | Name | Type | Field Number | Description|
 | ---- | ---- | ------------ | -----------|
 | location | TYPE_DOUBLE | 1 |  |
-| battery | TYPE_INT32 | 2 |  |
-| time | TYPE_STRING | 3 |  |
+| speed | TYPE_DOUBLE | 2 |  |
+| battery | TYPE_INT32 | 3 |  |
+| charging | TYPE_BOOL | 4 |  |
+| time | TYPE_STRING | 5 |  |
 
 <a name="Error"></a>
 
@@ -50,9 +52,11 @@
 | ---- | ---- | ------------ | -----------|
 | latitude | TYPE_DOUBLE | 1 |  |
 | longitude | TYPE_DOUBLE | 2 |  |
-| battery_remaining | TYPE_INT32 | 3 |  |
-| last_updated | TYPE_STRING | 4 |  |
-| err | TYPE_STRING | 5 |  |
+| speed | TYPE_DOUBLE | 3 |  |
+| battery | TYPE_INT32 | 4 |  |
+| charging | TYPE_BOOL | 5 |  |
+| last_updated | TYPE_STRING | 6 |  |
+| err | TYPE_STRING | 7 |  |
 
 ### Services
 
@@ -88,7 +92,9 @@
 | Parameter Name | Location | Type |
 | ---- | ---- | ------------ |
 | location | body | TYPE_DOUBLE |
+| speed | body | TYPE_DOUBLE |
 | battery | body | TYPE_INT32 |
+| charging | body | TYPE_BOOL |
 | time | body | TYPE_STRING |
 
 ##### GET `/location`
