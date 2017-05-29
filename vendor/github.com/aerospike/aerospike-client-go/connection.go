@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,10 @@
 package aerospike
 
 import (
+	"crypto/tls"
 	"io"
 	"net"
+	"strconv"
 	"time"
 
 	. "github.com/aerospike/aerospike-client-go/logger"
@@ -25,6 +27,8 @@ import (
 
 // Connection represents a connection with a timeout.
 type Connection struct {
+	node *Node
+
 	// timeout
 	timeout time.Duration
 
@@ -34,6 +38,9 @@ type Connection struct {
 
 	// connection object
 	conn net.Conn
+
+	// to avoid having a buffer pool and contention
+	dataBuffer []byte
 }
 
 func errToTimeoutErr(err error) error {
@@ -43,12 +50,29 @@ func errToTimeoutErr(err error) error {
 	return err
 }
 
+func shouldClose(err error) bool {
+	if err == io.EOF {
+		return true
+	}
+
+	if err, ok := err.(net.Error); ok && err.Timeout() {
+		return true
+	}
+
+	return false
+}
+
 // NewConnection creates a connection on the network and returns the pointer
 // A minimum timeout of 2 seconds will always be applied.
 // If the connection is not established in the specified timeout,
 // an error will be returned
 func NewConnection(address string, timeout time.Duration) (*Connection, error) {
-	newConn := &Connection{}
+	newConn := &Connection{dataBuffer: make([]byte, 1024)}
+
+	// don't wait indefinitely
+	if timeout == 0 {
+		timeout = 5 * time.Second
+	}
 
 	conn, err := net.DialTimeout("tcp", address, timeout)
 	if err != nil {
@@ -62,6 +86,43 @@ func NewConnection(address string, timeout time.Duration) (*Connection, error) {
 		return nil, err
 	}
 	return newConn, nil
+}
+
+// NewSecureConnection creates a TLS connection on the network and returns the pointer.
+// A minimum timeout of 2 seconds will always be applied.
+// If the connection is not established in the specified timeout,
+// an error will be returned
+func NewSecureConnection(policy *ClientPolicy, host *Host) (*Connection, error) {
+	address := net.JoinHostPort(host.Name, strconv.Itoa(host.Port))
+	conn, err := NewConnection(address, policy.Timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	if policy.TlsConfig == nil {
+		return conn, nil
+	}
+
+	// Use version dependent clone function to clone the config
+	tlsConfig := cloneTlsConfig(policy.TlsConfig)
+	tlsConfig.ServerName = host.TLSName
+
+	sconn := tls.Client(conn.conn, tlsConfig)
+	if err := sconn.Handshake(); err != nil {
+		sconn.Close()
+		return nil, err
+	}
+
+	if host.TLSName != "" && !tlsConfig.InsecureSkipVerify {
+		if err := sconn.VerifyHostname(host.TLSName); err != nil {
+			sconn.Close()
+			Logger.Error("Connection to address `" + address + "` failed to establish with error: " + err.Error())
+			return nil, errToTimeoutErr(err)
+		}
+	}
+
+	conn.conn = sconn
+	return conn, nil
 }
 
 // Write writes the slice to the connection buffer.
@@ -83,7 +144,7 @@ func (ctn *Connection) Write(buf []byte) (total int, err error) {
 	return total, errToTimeoutErr(err)
 }
 
-// ReadN reads N bytes from connection buffer to the provided slice.
+// ReadN reads N bytes from connection buffer to the provided Writer.
 func (ctn *Connection) ReadN(buf io.Writer, length int64) (total int64, err error) {
 	// if all bytes are not read, retry until successful
 	// Don't worry about the loop; we've already set the timeout elsewhere
@@ -92,10 +153,13 @@ func (ctn *Connection) ReadN(buf io.Writer, length int64) (total int64, err erro
 	if err == nil && total == length {
 		return total, nil
 	} else if err != nil {
+		if shouldClose(err) {
+			ctn.Close()
+		}
 		return total, errToTimeoutErr(err)
-	} else {
-		return total, NewAerospikeError(SERVER_ERROR)
 	}
+	ctn.Close()
+	return total, NewAerospikeError(SERVER_ERROR)
 }
 
 // Read reads from connection buffer to the provided slice.
@@ -114,10 +178,13 @@ func (ctn *Connection) Read(buf []byte, length int) (total int, err error) {
 	if err == nil && total == length {
 		return total, nil
 	} else if err != nil {
+		if shouldClose(err) {
+			ctn.Close()
+		}
 		return total, errToTimeoutErr(err)
-	} else {
-		return total, NewAerospikeError(SERVER_ERROR)
 	}
+	ctn.Close()
+	return total, NewAerospikeError(SERVER_ERROR)
 }
 
 // IsConnected returns true if the connection is not closed yet.
@@ -149,6 +216,11 @@ func (ctn *Connection) SetTimeout(timeout time.Duration) error {
 // Close closes the connection
 func (ctn *Connection) Close() {
 	if ctn != nil && ctn.conn != nil {
+		// deregister
+		if ctn.node != nil {
+			ctn.node.connectionCount.DecrementAndGet()
+		}
+
 		if err := ctn.conn.Close(); err != nil {
 			Logger.Warn(err.Error())
 		}
@@ -160,7 +232,7 @@ func (ctn *Connection) Close() {
 func (ctn *Connection) Authenticate(user string, password []byte) error {
 	// need to authenticate
 	if user != "" {
-		command := newAdminCommand()
+		command := newAdminCommand(ctn.dataBuffer)
 		if err := command.authenticate(ctn, user, password); err != nil {
 			// Socket not authenticated. Do not put back into pool.
 			return err

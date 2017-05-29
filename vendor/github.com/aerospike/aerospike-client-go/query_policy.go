@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,12 +21,7 @@ type QueryPolicy struct {
 
 // NewQueryPolicy generates a new QueryPolicy instance with default values.
 func NewQueryPolicy() *QueryPolicy {
-	res := &QueryPolicy{
+	return &QueryPolicy{
 		MultiPolicy: NewMultiPolicy(),
 	}
-
-	// Retry policy must be one-shot for queries
-	res.MaxRetries = 0
-
-	return res
 }

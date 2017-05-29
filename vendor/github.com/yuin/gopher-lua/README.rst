@@ -17,6 +17,7 @@ GopherLua: VM and compiler for Lua in Go.
 
 |
 
+
 GopherLua is a Lua5.1 VM and compiler written in Go. GopherLua has a same goal
 with Lua: **Be a scripting language with extensible semantics** . It provides
 Go APIs that allow you to easily embed a scripting language to your Go host
@@ -54,7 +55,7 @@ Installation
 
    go get github.com/yuin/gopher-lua
 
-GopherLua supports >= Go1.5.
+GopherLua supports >= Go1.6.
 
 ----------------------------------------------------------------
 Usage
@@ -149,10 +150,10 @@ To test ``LNilType`` and ``LBool``, You **must** use pre-defined constants.
 
    lv := L.Get(-1) // get the value at the top of the stack
 
-   if lv == LTrue { // correct
+   if lv == lua.LTrue { // correct
    }
 
-   if bl, ok == lv.(lua.LBool); ok && bool(bl) { // wrong
+   if bl, ok := lv.(lua.LBool); ok && bool(bl) { // wrong
    }
 
 In Lua, both ``nil`` and ``false`` make a condition false. ``LVIsFalse`` and ``LVAsBool`` implement this specification.
@@ -160,10 +161,10 @@ In Lua, both ``nil`` and ``false`` make a condition false. ``LVIsFalse`` and ``L
 .. code-block:: go
 
    lv := L.Get(-1) // get the value at the top of the stack
-   if LVIsFalse(lv) { // lv is nil or false
+   if lua.LVIsFalse(lv) { // lv is nil or false
    }
 
-   if LVAsBool(lv) { // lv is neither nil nor false
+   if lua.LVAsBool(lv) { // lv is neither nil nor false
    }
 
 Objects that based on go structs(``LFunction``. ``LUserData``, ``LTable``)
@@ -246,7 +247,7 @@ Working with coroutines.
 
 .. code-block:: go
 
-   co := L.NewThread() /* create a new thread */
+   co, _ := L.NewThread() /* create a new thread */
    fn := L.GetGlobal("coro").(*lua.LFunction) /* get function from lua */
    for {
        st, err, values := L.Resume(co, fn)
@@ -457,6 +458,72 @@ You can extend GopherLua with new types written in Go.
             panic(err)
         }
     }
+
++++++++++++++++++++++++++++++++++++++++++
+Terminating a running LState
++++++++++++++++++++++++++++++++++++++++++
+GopherLua supports the `Go Concurrency Patterns: Context <https://blog.golang.org/context>`_ .
+
+
+.. code-block:: go
+
+    L := lua.NewState()
+    defer L.Close()
+    ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+    defer cancel()
+    // set the context to our LState
+    L.SetContext(ctx)
+    err := L.DoString(`
+      local clock = os.clock
+      function sleep(n)  -- seconds
+        local t0 = clock()
+        while clock() - t0 <= n do end
+      end
+      sleep(3)
+    `)
+    // err.Error() contains "context deadline exceeded"
+
+With coroutines
+
+.. code-block:: go
+
+	L := lua.NewState()
+	defer L.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	L.SetContext(ctx)
+	defer cancel()
+	L.DoString(`
+	    function coro()
+		  local i = 0
+		  while true do
+		    coroutine.yield(i)
+			i = i+1
+		  end
+		  return i
+	    end
+	`)
+	co, cocancel := L.NewThread()
+	defer cocancel()
+	fn := L.GetGlobal("coro").(*LFunction)
+    
+	_, err, values := L.Resume(co, fn) // err is nil
+    
+	cancel() // cancel the parent context
+    
+	_, err, values = L.Resume(co, fn) // err is NOT nil : child context was canceled
+
+**Note that using a context causes performance degradation.**
+
+.. code-block::
+
+    time ./glua-with-context.exe fib.lua
+    9227465
+    0.01s user 0.11s system 1% cpu 7.505 total
+
+    time ./glua-without-context.exe fib.lua
+    9227465
+    0.01s user 0.01s system 0% cpu 5.306 total
+
 
 +++++++++++++++++++++++++++++++++++++++++
 Goroutines
@@ -714,6 +781,7 @@ Libraries for GopherLua
 - `glua-lfs <https://github.com/layeh/gopher-lfs>`_ : Partially implements the luafilesystem module for gopher-lua
 - `gluaurl <https://github.com/cjoudrey/gluaurl>`_ : A url parser/builder module for gopher-lua
 - `gluahttpscrape <https://github.com/felipejfc/gluahttpscrape>`_ : A simple HTML scraper module for gopher-lua
+- `gluaxmlpath <https://github.com/ailncode/gluaxmlpath>`_ : An xmlpath module for gopher-lua
 
 ----------------------------------------------------------------
 Donation

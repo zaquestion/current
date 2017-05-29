@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,13 +16,14 @@ package aerospike
 
 import (
 	. "github.com/aerospike/aerospike-client-go/types"
+	Buffer "github.com/aerospike/aerospike-client-go/utils/buffer"
 )
 
 // guarantee deleteCommand implements command interface
 var _ command = &deleteCommand{}
 
 type deleteCommand struct {
-	*singleCommand
+	singleCommand
 
 	policy  *WritePolicy
 	existed bool
@@ -46,12 +47,19 @@ func (cmd *deleteCommand) writeBuffer(ifc command) error {
 }
 
 func (cmd *deleteCommand) getNode(ifc command) (*Node, error) {
-	return cmd.cluster.getMasterNode(cmd.partition)
+	return cmd.cluster.getMasterNode(&cmd.partition)
 }
 
 func (cmd *deleteCommand) parseResult(ifc command, conn *Connection) error {
 	// Read header.
 	if _, err := conn.Read(cmd.dataBuffer, int(_MSG_TOTAL_HEADER_SIZE)); err != nil {
+		return err
+	}
+
+	header := Buffer.BytesToInt64(cmd.dataBuffer, 0)
+
+	// Validate header to make sure we are at the beginning of a message
+	if err := cmd.validateHeader(header); err != nil {
 		return err
 	}
 

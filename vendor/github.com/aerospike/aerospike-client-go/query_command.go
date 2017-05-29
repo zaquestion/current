@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 package aerospike
 
 type queryCommand struct {
-	*baseMultiCommand
+	baseMultiCommand
 
 	policy    *QueryPolicy
 	statement *Statement
@@ -23,7 +23,7 @@ type queryCommand struct {
 
 func newQueryCommand(node *Node, policy *QueryPolicy, statement *Statement, recordset *Recordset) *queryCommand {
 	return &queryCommand{
-		baseMultiCommand: newMultiCommand(node, recordset),
+		baseMultiCommand: *newMultiCommand(node, recordset),
 		policy:           policy,
 		statement:        statement,
 	}

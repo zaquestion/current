@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package aerospike
 
 import (
+	"net"
 	"strconv"
 )
 
@@ -24,18 +25,24 @@ type Host struct {
 	// Host name or IP address of database server.
 	Name string
 
+	//TLSName defines the TLS certificate name used for secure connections.
+	TLSName string
+
 	// Port of database server.
 	Port int
-
-	addPort string
 }
 
 // NewHost initializes new host instance.
 func NewHost(name string, port int) *Host {
-	return &Host{Name: name, Port: port, addPort: name + ":" + strconv.Itoa(port)}
+	return &Host{Name: name, Port: port}
 }
 
 // Implements stringer interface
 func (h *Host) String() string {
-	return h.addPort
+	return net.JoinHostPort(h.Name, strconv.Itoa(h.Port))
+}
+
+// Implements stringer interface
+func (h *Host) equals(other *Host) bool {
+	return h.Name == other.Name && h.Port == other.Port
 }

@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package aerospike
 
 import (
 	. "github.com/aerospike/aerospike-client-go/types"
+	Buffer "github.com/aerospike/aerospike-client-go/utils/buffer"
 )
 
 // guarantee touchCommand implements command interface
@@ -29,7 +30,7 @@ type touchCommand struct {
 
 func newTouchCommand(cluster *Cluster, policy *WritePolicy, key *Key) *touchCommand {
 	newTouchCmd := &touchCommand{
-		singleCommand: *newSingleCommand(cluster, key),
+		singleCommand: newSingleCommand(cluster, key),
 		policy:        policy,
 	}
 
@@ -45,12 +46,19 @@ func (cmd *touchCommand) writeBuffer(ifc command) error {
 }
 
 func (cmd *touchCommand) getNode(ifc command) (*Node, error) {
-	return cmd.cluster.getMasterNode(cmd.partition)
+	return cmd.cluster.getMasterNode(&cmd.partition)
 }
 
 func (cmd *touchCommand) parseResult(ifc command, conn *Connection) error {
 	// Read header.
 	if _, err := conn.Read(cmd.dataBuffer, int(_MSG_TOTAL_HEADER_SIZE)); err != nil {
+		return err
+	}
+
+	header := Buffer.BytesToInt64(cmd.dataBuffer, 0)
+
+	// Validate header to make sure we are at the beginning of a message
+	if err := cmd.validateHeader(header); err != nil {
 		return err
 	}
 

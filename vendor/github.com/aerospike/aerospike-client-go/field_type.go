@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ const (
 	DIGEST_RIPE_ARRAY FieldType = 6
 	TRAN_ID           FieldType = 7 // user supplied transaction id, which is simply passed back
 	SCAN_OPTIONS      FieldType = 8
+	SCAN_TIMEOUT      FieldType = 9
 	INDEX_NAME        FieldType = 21
 	INDEX_RANGE       FieldType = 22
 	INDEX_FILTER      FieldType = 23
@@ -43,4 +44,5 @@ const (
 	UDF_ARGLIST       FieldType = 32
 	UDF_OP            FieldType = 33
 	QUERY_BINLIST     FieldType = 40
+	PREDEXP           FieldType = 43
 )

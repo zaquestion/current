@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package aerospike
 
 import (
+	"crypto/tls"
 	"time"
 )
 
@@ -29,16 +30,21 @@ type ClientPolicy struct {
 	// in hashed format. Leave empty for clusters running without restricted access.
 	Password string
 
-	// Initial host connection timeout in milliseconds.  The timeout when opening a connection
+	// ClusterName sets the expected cluster ID.  If not null, server nodes must return this cluster ID in order to
+	// join the client's view of the cluster. Should only be set when connecting to servers that
+	// support the "cluster-name" info command. (v3.10+)
+	ClusterName string //=""
+
+	// Initial host connection timeout duration.  The timeout when opening a connection
 	// to the server host for the first time.
-	Timeout time.Duration //= 1 second
+	Timeout time.Duration //= 30 seconds
 
 	// Connection idle timeout. Every time a connection is used, its idle
 	// deadline will be extended by this duration. When this deadline is reached,
 	// the connection will be closed and discarded from the connection pool.
 	IdleTimeout time.Duration //= 14 seconds
 
-	// Size of the Connection Queue cache.
+	// ConnectionQueueCache specifies the size of the Connection Queue cache PER NODE.
 	ConnectionQueueSize int //= 256
 
 	// If set to true, will not create a new connection
@@ -75,6 +81,14 @@ type ClientPolicy struct {
 	// extra storage multiplied by the replication factor.
 	// The default is false (only request master replicas and never prole replicas).
 	RequestProleReplicas bool // false
+
+	// TlsConfig specifies TLS secure connection policy for TLS enabled servers.
+	// For better performance, we suggest prefering the server-side ciphers by
+	// setting PreferServerCipherSuites = true.
+	TlsConfig *tls.Config //= nil
+
+	// IgnoreOtherSubnetAliases helps to ignore aliases that are outside main subnet
+	IgnoreOtherSubnetAliases bool //= false
 }
 
 // NewClientPolicy generates a new ClientPolicy with default values.
@@ -87,6 +101,7 @@ func NewClientPolicy() *ClientPolicy {
 		TendInterval:                time.Second,
 		LimitConnectionsToQueueSize: true,
 		RequestProleReplicas:        false,
+		IgnoreOtherSubnetAliases:    false,
 	}
 }
 

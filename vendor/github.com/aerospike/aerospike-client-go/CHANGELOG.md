@@ -1,5 +1,199 @@
 # Change History
 
+## April 25 2017: v1.27.0
+
+  Feature, Performance improvements and bug fix release.
+
+  * **New Features**
+
+    - Added `BatchGetObjects` method.
+    - Added Exponential Backoff by introducing `BasePolicy.SleepMultiplier`. Only Values > 1.0 are effective. PR #192, thanks to [Venil Noronha](https://github.com/venilnoronha)
+
+  * **Improvements**
+
+    - Packer tries to see if it can use generic data types before using reflection.
+    - Operations, including CDTs do not allocate a buffer anymore, unless reused.
+
+  * **Incompatible changes**:
+    - `BinName` and `BinValue` are not exported in `Operation` anymore. These fields shouldn't have been used anyway since `Operation`s used to cache their internal command.
+
+  * **Fixes**
+
+    - Documentation Fixes. Thanks to [Nassor Paulino da Silva](https://github.com/nassor) and [HArmen](https://github.com/alicebob)
+
+
+## April 5 2017: v1.26.0
+
+  Feature, Performance improvements and bug fix release.
+
+  * **New Features**
+
+    - Predicate API is supported (for server v3.12+)
+    - Added `Truncate` method to quickly remove all data from namespaces or sets (for server v3.12+).
+    - Support `ScanPolicy.ServerSocketTimeout` (for server v3.12+).
+    - Support `ClientPolicy.IgnoreOtherSubnetAliases` to ignore hosts from other subnets. PR #182, thanks to [wedi-dev](https://github.com/wedi-dev)
+
+  * **Improvements**
+
+    - Added a lot of predefined generic slice and map types in `NewValue` method to avoid hitting reflection as much as possible.
+    - Fix `go vet` complaints.
+
+  * **Fixes**
+
+    - Allow streaming commands (scan/query/aggregation) to retry unless the error occurs during parsing of the results. Fixes issue #187
+    - Use `net.JoinHostPort` to concatinate host and port values instead of doing it directly. Fixes some issues in IPv6 connection strings.
+    - Improved initial Tend run.
+    - Fixes `cluster-name` checking bug.
+
+## March 8 2017: v1.25.1
+
+  Hot fix release. Updating the client is recommended.
+
+  * **Fixes**
+
+    - Fixed an issue where errors in Scan/Query unmarshalling would be duplicated and could cause a deadlock.
+
+## February 28 2017: v1.25.0
+
+  Performance improvements and fix release.
+
+  * **Improvements**
+
+    - Check tend duration and compare it to tend interval, and warn the user if tend takes longer than tend interval.
+    - Seed the cluster concurrently, and return as soon as any of the seeds is validated.
+    - Tend the cluster concurrently. Allows use of very big clusters with no delay.
+    - Partitions the connection queue to avoid contention.
+    - Cluster partition map is merged from all node fragments and updated only once per tend to reduce contention to absolute minimum.
+
+  * **Fixes**
+
+    - Fixed an issue where a valid but unreachable seed could timeout and stall connecting and tending the cluster..
+    - Fix result code comments.
+
+## January 11 2017: v1.24.0
+
+  Minor feature and fix release.
+
+  * **New Features**
+
+    - TLS/SSL connections are now officially supported.
+    - Added Role/Privilege API.
+
+  * **Improvements**
+
+    - Return a client-side error when no ops are passed to the operate command.
+    - Export error attribute in `NodeError`
+    - Do not attempt to refresh peers if it is not supported by the nodes.
+
+  * **Fixes**
+
+    - Use namespace default-ttl for tests instead of assuming 30d
+    - Always drain scan connections after parsing the records.
+    - Fix panic in GetObject() if all bins in result is nil. PR #172, thanks to [Hamper](https://github.com/hamper)
+    - Fix WritePolicy usage with UDF. PR #174, thanks to [Bertrand Paquet](https://github.com/bpaquet)
+    - Close connection right when it has an io error and don't wait for the caller.
+
+## December 20 2016 : v1.23.0
+
+  Minor feature and fix release.
+
+  * **New Features**
+
+    - Exposes the internal `client.Cluster` object to the users.
+    - Added New API for high-performance complex data type packing, and removed the old API.
+
+  * **Improvements**
+
+    - Only update the partition map if the partition generatio has changed.
+    - Use tend connection for user management commands.
+    - Marks LargeList as deprecated. Use CDT methods instead.
+    - Always validate the message header to avoid reading the remainder of other command buffers.
+    - Removes GeoJson from key helper.
+    - Improves tend algorthm to allow complete disconnection from the cluster if none of the clusters are accessible.
+    - `PutObject` method will now accept objects as well. PR #156, thanks to [Sarath S Pillai](https://github.com/sarathsp06)
+
+  * **Fixes**
+
+    - Do not attemp to add a node which were unaccessible to avoid panic.
+    - Fix invalid connectionCount. PR #168, thanks to [Jun Kimura](https://github.com/bluele)
+    - Fixes minor bug that didn't return the error on reading from the connection during scans.
+
+## November 29 2016 : v1.22.0
+
+  Hot fix release. Please upgrade if you have been using other aerospike clients with your database parallel to Go.
+
+  * **Fixes**
+
+    - Fixes an issue where short strings in Lists and Maps wouldn't unpack correctly. Resolves #161.
+
+## November 16 2016 : v1.21.0
+
+  Minor fix release.
+
+  * **New Features**
+
+    - Added new constants for expiration in `WritePolicy`: `TTLServerDefault`, `TTLDontExpire`, `TTLDontUpdate`
+
+  * **Improvements**
+
+    - Corrects typos in the code. PR #142, thanks to [Muyiwa Olurin ](https://github.com/muyiwaolurin)
+    - Use the tend connection for `RequestInfo` commands.
+
+  * **Fixes**
+
+    - Fixes an issue where TTL values were calcualted wrongly when they were set not to expire.
+    - Fixes an issue where `PutObjects` would marshal `[]byte` to `List` in database. PR #152, thanks to [blide](https://github.com/blide)
+    - Fixes an issue where `Recordset` could leak goroutines. PR #153, thanks to [Deepak Prabhakara](https://github.com/deepakprabhakara)
+
+## October 25 2016 : v1.20.0
+
+  Major improvements release. There has been major changes in the library. Please test rigorously before upgrading to the new version.
+
+  * **New Features**
+
+    - Let user define the desired tag for bin names in structs using `SetAerospikeTag` function.
+    - Added `as_performance` build tag to avoid including the slow convenience API which uses reflections in the client code.
+      To use this feature, you should include -tags="as_performance" when building your project.
+
+      *NOTICE*: Keep in mind that your code may not compile using this flag. That is by design.
+
+  * **Improvements**
+
+    - Added special packer for map[string]interface{} in `NewValue` method.
+    - Avoid allocating memory for Map and List values.
+    - Allocate commands on the stack to avoid heap allcations.
+    - Avoid allocating memory for `packer`.
+    - Avoid Allocating memory in computeHash for keys.
+    - Avoid allocating memory in Ripe160MD digest.
+    - Removed BufferPool and moved buffers to `Connection` objects to remove lock contention.
+    - Added `ListIter` and `MapIter` interfaces to support passing Maps and Lists to the client without using reflection.
+
+## October 14 2016 : v1.19.0
+
+  Major feature and improvement release.
+
+  * **New Features**
+
+    * Support TLS secured connections. (Feature will be supported in coming server releases.)
+
+    * Support IPv6 protocol. Supported by Aerospike Server 3.10+.
+
+    * Support `cluster-name` verification. Supported by Aerospike Server 3.10+.
+
+    * Support new peers info protocol. Supported by Aerospike Server 3.10+.
+
+  * **Improvements**
+
+    * Will retry the operation even when reading from the buffer. Set `Policy.MaxRetries = 0` to avoid this behavior. PR #143, thanks to [Hector Jusforgues](https://github.com/hectorj)
+
+    * Much improved cluster management algorithm. Will now handle the case where multiple nodes go down simultaneously, still protecting against split brain rogue nodes.
+
+  * **Fixes**
+
+    * Try all alias IPs in node validator. Resolves #144.
+
+    * Updated job status check for execute tasks.
+
 ## August 19 2016 : v1.18.0
 
   Minor improvements release.

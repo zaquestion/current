@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2016 Aerospike, Inc.
+ * Copyright 2013-2017 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements WHICH ARE COMPATIBLE WITH THE APACHE LICENSE, VERSION 2.0.
@@ -40,13 +40,11 @@ type partitionParser struct {
 	generation     int
 	length         int
 	offset         int
-	copied         bool
 }
 
-func newPartitionParser(conn *Connection, node *Node, pmap partitionMap, partitionCount int, requestProleReplicas bool) (*partitionParser, error) {
+func newPartitionParser(node *Node, partitionCount int, requestProleReplicas bool) (*partitionParser, error) {
 	newPartitionParser := &partitionParser{
 		partitionCount: partitionCount,
-		pmap:           pmap,
 	}
 
 	// Send format 1:  partition-generation\nreplicas-master\n
@@ -55,7 +53,7 @@ func newPartitionParser(conn *Connection, node *Node, pmap partitionMap, partiti
 	if requestProleReplicas {
 		command = _ReplicasAll
 	}
-	info, err := newInfo(conn, _PartitionGeneration, command)
+	info, err := node.requestRawInfo(_PartitionGeneration, command)
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +68,8 @@ func newPartitionParser(conn *Connection, node *Node, pmap partitionMap, partiti
 	if err != nil {
 		return nil, err
 	}
+
+	newPartitionParser.pmap = make(partitionMap)
 
 	if requestProleReplicas {
 		err = newPartitionParser.parseReplicasAll(node)
@@ -86,10 +86,6 @@ func newPartitionParser(conn *Connection, node *Node, pmap partitionMap, partiti
 
 func (pp *partitionParser) getGeneration() int {
 	return pp.generation
-}
-
-func (pp *partitionParser) isPartitionMapCopied() bool {
-	return pp.copied
 }
 
 func (pp *partitionParser) getPartitionMap() partitionMap {
@@ -154,7 +150,6 @@ func (pp *partitionParser) parseReplicasMaster(node *Node) error {
 			if replicaArray == nil {
 				replicaArray = make([][]*Node, 1)
 				replicaArray[0] = make([]*Node, pp.partitionCount)
-				pp.copyPartitionMap()
 				pp.pmap[namespace] = replicaArray
 			}
 
@@ -220,7 +215,6 @@ func (pp *partitionParser) parseReplicasAll(node *Node) error {
 					replicaArray[i] = make([]*Node, pp.partitionCount)
 				}
 
-				pp.copyPartitionMap()
 				pp.pmap[namespace] = replicaArray
 			} else if len(replicaArray) != replicaCount {
 				Logger.Info("Namespace `%s` replication factor changed from `%d` to `%d` ", namespace, len(replicaArray), replicaCount)
@@ -247,7 +241,6 @@ func (pp *partitionParser) parseReplicasAll(node *Node) error {
 					}
 				}
 
-				pp.copyPartitionMap()
 				replicaArray = replicaTarget
 				pp.pmap[namespace] = replicaArray
 			}
@@ -317,24 +310,6 @@ func (pp *partitionParser) decodeBitmap(node *Node, nodeArray []*Node, begin int
 	}
 
 	return nil
-}
-
-func (pp *partitionParser) copyPartitionMap() {
-	if !pp.copied {
-		// Make shallow copy of map.
-		pmap := make(partitionMap, len(pp.pmap))
-		for ns, replArr := range pp.pmap {
-			newReplArr := make([][]*Node, len(replArr))
-			for i, nArr := range replArr {
-				newNArr := make([]*Node, len(nArr))
-				copy(newNArr, nArr)
-				newReplArr[i] = newNArr
-			}
-			pmap[ns] = newReplArr
-		}
-		pp.pmap = pmap
-		pp.copied = true
-	}
 }
 
 func (pp *partitionParser) expectName(name string) error {

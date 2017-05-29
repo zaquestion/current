@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 )
 
 type batchCommandExists struct {
-	*baseMultiCommand
+	baseMultiCommand
 
 	batchNamespace *batchNamespace
 	policy         *BasePolicy
@@ -38,13 +38,15 @@ func newBatchCommandExists(
 	keys []*Key,
 	existsArray []bool,
 ) *batchCommandExists {
-	return &batchCommandExists{
-		baseMultiCommand: newMultiCommand(node, nil),
+	res := &batchCommandExists{
+		baseMultiCommand: *newMultiCommand(node, nil),
 		batchNamespace:   batchNamespace,
 		policy:           policy,
 		keys:             keys,
 		existsArray:      existsArray,
 	}
+	res.oneShot = false
+	return res
 }
 
 func (cmd *batchCommandExists) getPolicy(ifc command) Policy {
@@ -96,13 +98,13 @@ func (cmd *batchCommandExists) parseRecordResults(ifc command, receiveSize int) 
 		offset := cmd.batchNamespace.offsets[cmd.index]
 		cmd.index++
 
-		if bytes.Equal(key.digest, cmd.keys[offset].digest) {
+		if bytes.Equal(key.digest[:], cmd.keys[offset].digest[:]) {
 			// only set the results to true; as a result, no synchronization is needed
 			if resultCode == 0 {
 				cmd.existsArray[offset] = true
 			}
 		} else {
-			return false, NewAerospikeError(PARSE_ERROR, "Unexpected batch key returned: "+string(key.namespace)+","+Buffer.BytesToHexString(key.digest))
+			return false, NewAerospikeError(PARSE_ERROR, "Unexpected batch key returned: "+string(key.namespace)+","+Buffer.BytesToHexString(key.digest[:]))
 		}
 	}
 	return true, nil

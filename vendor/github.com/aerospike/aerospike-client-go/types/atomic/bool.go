@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,14 +16,14 @@ package atomic
 
 import "sync/atomic"
 
-// AtomicBool implements a synchronized boolean value
+//AtomicBool implements a synchronized boolean value
 type AtomicBool struct {
 	val int32
 }
 
 // NewAtomicBool generates a new AtomicBoolean instance.
 func NewAtomicBool(value bool) *AtomicBool {
-	var i int32 = 0
+	var i int32
 	if value {
 		i = 1
 	}
@@ -39,14 +39,23 @@ func (ab *AtomicBool) Get() bool {
 
 // Set atomically sets the boolean value.
 func (ab *AtomicBool) Set(newVal bool) {
-	var i int32 = 0
+	var i int32
 	if newVal {
 		i = 1
 	}
 	atomic.StoreInt32(&(ab.val), int32(i))
 }
 
-// CompareAndSet atomically sets the boolean value if the current value is equal to updated value.
+// Or atomically applies OR operation to the boolean value.
+func (ab *AtomicBool) Or(newVal bool) bool {
+	if !newVal {
+		return ab.Get()
+	}
+	atomic.StoreInt32(&(ab.val), int32(1))
+	return true
+}
+
+//CompareAndToggle atomically sets the boolean value if the current value is equal to updated value.
 func (ab *AtomicBool) CompareAndToggle(expect bool) bool {
 	updated := 1
 	if expect {

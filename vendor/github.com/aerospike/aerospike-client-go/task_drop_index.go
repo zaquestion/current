@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ import "strings"
 
 // DropIndexTask is used to poll for long running create index completion.
 type DropIndexTask struct {
-	*BaseTask
+	*baseTask
 
 	namespace string
 	indexName string
@@ -27,7 +27,7 @@ type DropIndexTask struct {
 // NewDropIndexTask initializes a task with fields needed to query server nodes.
 func NewDropIndexTask(cluster *Cluster, namespace string, indexName string) *DropIndexTask {
 	return &DropIndexTask{
-		BaseTask:  NewTask(cluster, false),
+		baseTask:  newTask(cluster, false),
 		namespace: namespace,
 		indexName: indexName,
 	}
@@ -40,7 +40,7 @@ func (tski *DropIndexTask) IsDone() (bool, error) {
 	complete := false
 
 	for _, node := range nodes {
-		responseMap, err := RequestNodeInfo(node, command)
+		responseMap, err := node.RequestInfo(command)
 		if err != nil {
 			return false, err
 		}

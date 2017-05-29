@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -327,7 +327,7 @@ func luaMapKeys(L *lua.LState) int {
 	iter := make(chan interface{})
 
 	go func() {
-		for k, _ := range ref.m {
+		for k := range ref.m {
 			iter <- k
 		}
 		close(iter)

@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import (
 )
 
 type readHeaderCommand struct {
-	*singleCommand
+	singleCommand
 
 	policy *BasePolicy
 	record *Record
@@ -44,12 +44,19 @@ func (cmd *readHeaderCommand) writeBuffer(ifc command) error {
 }
 
 func (cmd *readHeaderCommand) getNode(ifc command) (*Node, error) {
-	return cmd.cluster.getReadNode(cmd.partition, cmd.policy.ReplicaPolicy)
+	return cmd.cluster.getReadNode(&cmd.partition, cmd.policy.ReplicaPolicy)
 }
 
 func (cmd *readHeaderCommand) parseResult(ifc command, conn *Connection) error {
 	// Read header.
 	if _, err := conn.Read(cmd.dataBuffer, int(_MSG_TOTAL_HEADER_SIZE)); err != nil {
+		return err
+	}
+
+	header := Buffer.BytesToInt64(cmd.dataBuffer, 0)
+
+	// Validate header to make sure we are at the beginning of a message
+	if err := cmd.validateHeader(header); err != nil {
 		return err
 	}
 

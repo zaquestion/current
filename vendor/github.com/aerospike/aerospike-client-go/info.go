@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ func RequestNodeInfo(node *Node, name ...string) (map[string]string, error) {
 
 	response, err := RequestInfo(conn, name...)
 	if err != nil {
-		node.InvalidateConnection(conn)
+		conn.Close()
 		return nil, err
 	}
 	node.PutConnection(conn)

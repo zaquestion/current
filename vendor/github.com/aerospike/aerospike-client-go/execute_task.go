@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 
 // ExecuteTask is used to poll for long running server execute job completion.
 type ExecuteTask struct {
-	*BaseTask
+	*baseTask
 
 	taskId uint64
 	scan   bool
@@ -32,7 +32,7 @@ type ExecuteTask struct {
 // NewExecuteTask initializes task with fields needed to query server nodes.
 func NewExecuteTask(cluster *Cluster, statement *Statement) *ExecuteTask {
 	return &ExecuteTask{
-		BaseTask: NewTask(cluster, false),
+		baseTask: newTask(cluster, false),
 		taskId:   statement.TaskId,
 		scan:     statement.IsScan(),
 	}
@@ -52,18 +52,10 @@ func (etsk *ExecuteTask) IsDone() (bool, error) {
 	nodes := etsk.cluster.GetNodes()
 
 	for _, node := range nodes {
-		conn, err := node.GetConnection(0)
+		responseMap, err := node.RequestInfo(command)
 		if err != nil {
 			return false, err
 		}
-		responseMap, err := RequestInfo(conn, command)
-		if err != nil {
-			node.InvalidateConnection(conn)
-			return false, err
-		}
-
-		node.PutConnection(conn)
-
 		response := responseMap[command]
 
 		if strings.HasPrefix(response, "ERROR:2") {
@@ -78,7 +70,7 @@ func (etsk *ExecuteTask) IsDone() (bool, error) {
 			return false, NewAerospikeError(UDF_BAD_RESPONSE, response)
 		}
 
-		find := "job_status="
+		find := "status="
 		index := strings.Index(response, find)
 
 		if index < 0 {
@@ -94,8 +86,8 @@ func (etsk *ExecuteTask) IsDone() (bool, error) {
 			continue
 		}
 
-		status := strings.ToUpper(response[:index])
-		if status != "DONE" {
+		status := strings.ToLower(response[:index])
+		if !strings.HasPrefix(status, "done") {
 			return false, nil
 		}
 	}

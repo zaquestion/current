@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,11 +15,12 @@
 package aerospike
 
 import (
-	"bytes"
 	"fmt"
 	"reflect"
+	"time"
 
 	. "github.com/aerospike/aerospike-client-go/types"
+	xrand "github.com/aerospike/aerospike-client-go/types/rand"
 	Buffer "github.com/aerospike/aerospike-client-go/utils/buffer"
 )
 
@@ -33,10 +34,7 @@ type multiCommand interface {
 }
 
 type baseMultiCommand struct {
-	*baseCommand
-
-	buf     bytes.Buffer
-	remains int64
+	baseCommand
 
 	terminationError ResultCode
 
@@ -51,29 +49,52 @@ type baseMultiCommand struct {
 	selectCases    []reflect.SelectCase
 }
 
+var multiObjectParser func(
+	cmd *baseMultiCommand,
+	obj reflect.Value,
+	opCount int,
+	fieldCount int,
+	generation uint32,
+	expiration uint32,
+) error
+
+var prepareReflectionData func(cmd *baseMultiCommand)
+
 func newMultiCommand(node *Node, recordset *Recordset) *baseMultiCommand {
 	cmd := &baseMultiCommand{
-		baseCommand: &baseCommand{node: node},
-		recordset:   recordset,
+		baseCommand: baseCommand{
+			node:    node,
+			oneShot: true,
+		},
+		recordset: recordset,
 	}
 
-	// if a channel is assigned, assign its value type
-	if cmd.recordset != nil && !cmd.recordset.objChan.IsNil() {
-		// this channel must be of type chan *T
-		cmd.resObjType = cmd.recordset.objChan.Type().Elem().Elem()
-		cmd.resObjMappings = objectMappings.getMapping(cmd.recordset.objChan.Type().Elem().Elem())
-
-		cmd.selectCases = []reflect.SelectCase{
-			reflect.SelectCase{Dir: reflect.SelectSend, Chan: cmd.recordset.objChan},
-			reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(cmd.recordset.cancelled)},
-		}
+	if prepareReflectionData != nil {
+		prepareReflectionData(cmd)
 	}
-
 	return cmd
 }
 
 func (cmd *baseMultiCommand) getNode(ifc command) (*Node, error) {
 	return cmd.node, nil
+}
+
+func (cmd *baseMultiCommand) getConnection(timeout time.Duration) (*Connection, error) {
+	return cmd.node.getConnectionWithHint(timeout, byte(xrand.Int64()%256))
+}
+
+func (cmd *baseMultiCommand) putConnection(conn *Connection) {
+	cmd.node.putConnectionWithHint(conn, byte(xrand.Int64()%256))
+}
+
+func (cmd *baseMultiCommand) drainConn(receiveSize int) error {
+	// consume the rest of the input buffer from the socket
+	if cmd.dataOffset < receiveSize && cmd.conn.IsConnected() {
+		if err := cmd.readBytes(receiveSize - cmd.dataOffset); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (cmd *baseMultiCommand) parseResult(ifc command, conn *Connection) error {
@@ -82,7 +103,6 @@ func (cmd *baseMultiCommand) parseResult(ifc command, conn *Connection) error {
 	status := true
 
 	var err error
-	cnt := 0
 
 	for status {
 		// Read header.
@@ -91,12 +111,17 @@ func (cmd *baseMultiCommand) parseResult(ifc command, conn *Connection) error {
 		}
 
 		size := Buffer.BytesToInt64(cmd.dataBuffer, 0)
-		receiveSize := int(size & 0xFFFFFFFFFFFF)
-		cmd.remains = int64(receiveSize)
-		cnt++
 
+		// Validate header to make sure we are at the beginning of a message
+		if err := cmd.validateHeader(size); err != nil {
+			return err
+		}
+
+		receiveSize := int(size & 0xFFFFFFFFFFFF)
 		if receiveSize > 0 {
-			if status, err = ifc.parseRecordResults(ifc, receiveSize); err != nil {
+			status, err = ifc.parseRecordResults(ifc, receiveSize)
+			cmd.drainConn(receiveSize)
+			if err != nil {
 				return err
 			}
 		} else {
@@ -108,7 +133,7 @@ func (cmd *baseMultiCommand) parseResult(ifc command, conn *Connection) error {
 }
 
 func (cmd *baseMultiCommand) parseKey(fieldCount int) (*Key, error) {
-	var digest []byte
+	var digest [20]byte
 	var namespace, setName string
 	var userKey Value
 	var err error
@@ -128,8 +153,7 @@ func (cmd *baseMultiCommand) parseKey(fieldCount int) (*Key, error) {
 
 		switch fieldtype {
 		case DIGEST_RIPE:
-			digest = make([]byte, size, size)
-			copy(digest, cmd.dataBuffer[1:size+1])
+			copy(digest[:], cmd.dataBuffer[1:size+1])
 		case NAMESPACE:
 			namespace = string(cmd.dataBuffer[1 : size+1])
 		case TABLE:
@@ -155,43 +179,12 @@ func (cmd *baseMultiCommand) readBytes(length int) error {
 		cmd.dataBuffer = make([]byte, length)
 	}
 
-	for cmd.buf.Len() < length {
-		if cmd.remains < 0 {
-			return fmt.Errorf("Requested socket read, but no bytes remain in buffer %d", 1)
-		}
-
-		if cmd.remains >= _CHUNK_SIZE {
-			if err := cmd.readNextChunk(_CHUNK_SIZE); err != nil {
-				return nil
-			}
-			cmd.remains -= _CHUNK_SIZE
-		} else {
-			if err := cmd.readNextChunk(int(cmd.remains)); err != nil {
-				return err
-			}
-			cmd.remains = 0
-		}
-	}
-
-	if n, err := cmd.buf.Read(cmd.dataBuffer[:length]); err != nil || n != length {
+	if n, err := cmd.conn.Read(cmd.dataBuffer[:length], length); err != nil {
 		return fmt.Errorf("Requested to read %d bytes, but %d was read. (%v)", length, n, err)
 	}
 
 	cmd.dataOffset += length
 	return nil
-}
-
-func (cmd *baseMultiCommand) readNextChunk(length int) error {
-
-	// Corrupted data streams can result in a huge length.
-	// Do a sanity check here.
-	if length > _MAX_BUFFER_SIZE {
-		return NewAerospikeError(PARSE_ERROR, fmt.Sprintf("Invalid readBytes length: %d", length))
-	}
-
-	// read first chunk up front
-	_, err := cmd.conn.ReadN(&cmd.buf, int64(length))
-	return err
 }
 
 func (cmd *baseMultiCommand) parseRecordResults(ifc command, receiveSize int) (bool, error) {
@@ -200,24 +193,17 @@ func (cmd *baseMultiCommand) parseRecordResults(ifc command, receiveSize int) (b
 
 	for cmd.dataOffset < receiveSize {
 		if err := cmd.readBytes(int(_MSG_REMAINING_HEADER_SIZE)); err != nil {
-			cmd.recordset.Errors <- newNodeError(cmd.node, err)
+			err = newNodeError(cmd.node, err)
 			return false, err
 		}
 		resultCode := ResultCode(cmd.dataBuffer[5] & 0xFF)
 
 		if resultCode != 0 {
 			if resultCode == KEY_NOT_FOUND_ERROR {
-				// consume the rest of the input buffer from the socket
-				if cmd.dataOffset < receiveSize {
-					if err := cmd.readBytes(receiveSize - cmd.dataOffset); err != nil {
-						cmd.recordset.Errors <- newNodeError(cmd.node, err)
-						return false, err
-					}
-				}
 				return false, nil
 			}
 			err := NewAerospikeError(resultCode)
-			cmd.recordset.Errors <- newNodeError(cmd.node, err)
+			err = newNodeError(cmd.node, err)
 			return false, err
 		}
 
@@ -235,7 +221,7 @@ func (cmd *baseMultiCommand) parseRecordResults(ifc command, receiveSize int) (b
 
 		key, err := cmd.parseKey(fieldCount)
 		if err != nil {
-			cmd.recordset.Errors <- newNodeError(cmd.node, err)
+			err = newNodeError(cmd.node, err)
 			return false, err
 		}
 
@@ -247,7 +233,7 @@ func (cmd *baseMultiCommand) parseRecordResults(ifc command, receiveSize int) (b
 
 			for i := 0; i < opCount; i++ {
 				if err := cmd.readBytes(8); err != nil {
-					cmd.recordset.Errors <- newNodeError(cmd.node, err)
+					err = newNodeError(cmd.node, err)
 					return false, err
 				}
 
@@ -256,19 +242,19 @@ func (cmd *baseMultiCommand) parseRecordResults(ifc command, receiveSize int) (b
 				nameSize := int(cmd.dataBuffer[7])
 
 				if err := cmd.readBytes(nameSize); err != nil {
-					cmd.recordset.Errors <- newNodeError(cmd.node, err)
+					err = newNodeError(cmd.node, err)
 					return false, err
 				}
 				name := string(cmd.dataBuffer[:nameSize])
 
 				particleBytesSize := int((opSize - (4 + nameSize)))
 				if err = cmd.readBytes(particleBytesSize); err != nil {
-					cmd.recordset.Errors <- newNodeError(cmd.node, err)
+					err = newNodeError(cmd.node, err)
 					return false, err
 				}
 				value, err := bytesToParticle(particleType, cmd.dataBuffer, 0, particleBytesSize)
 				if err != nil {
-					cmd.recordset.Errors <- newNodeError(cmd.node, err)
+					err = newNodeError(cmd.node, err)
 					return false, err
 				}
 
@@ -286,10 +272,10 @@ func (cmd *baseMultiCommand) parseRecordResults(ifc command, receiveSize int) (b
 			case <-cmd.recordset.cancelled:
 				return false, NewAerospikeError(cmd.terminationErrorType)
 			}
-		} else {
+		} else if multiObjectParser != nil {
 			obj := reflect.New(cmd.resObjType)
-			if err := cmd.parseObject(obj, opCount, fieldCount, generation, expiration); err != nil {
-				cmd.recordset.Errors <- newNodeError(cmd.node, err)
+			if err := multiObjectParser(cmd, obj, opCount, fieldCount, generation, expiration); err != nil {
+				err = newNodeError(cmd.node, err)
 				return false, err
 			}
 
@@ -306,47 +292,4 @@ func (cmd *baseMultiCommand) parseRecordResults(ifc command, receiveSize int) (b
 	}
 
 	return true, nil
-}
-
-func (cmd *baseMultiCommand) parseObject(
-	obj reflect.Value,
-	opCount int,
-	fieldCount int,
-	generation uint32,
-	expiration uint32,
-) error {
-	for i := 0; i < opCount; i++ {
-		if err := cmd.readBytes(8); err != nil {
-			cmd.recordset.Errors <- newNodeError(cmd.node, err)
-			return err
-		}
-
-		opSize := int(Buffer.BytesToUint32(cmd.dataBuffer, 0))
-		particleType := int(cmd.dataBuffer[5])
-		nameSize := int(cmd.dataBuffer[7])
-
-		if err := cmd.readBytes(nameSize); err != nil {
-			cmd.recordset.Errors <- newNodeError(cmd.node, err)
-			return err
-		}
-		name := string(cmd.dataBuffer[:nameSize])
-
-		particleBytesSize := int((opSize - (4 + nameSize)))
-		if err := cmd.readBytes(particleBytesSize); err != nil {
-			cmd.recordset.Errors <- newNodeError(cmd.node, err)
-			return err
-		}
-		value, err := bytesToParticle(particleType, cmd.dataBuffer, 0, particleBytesSize)
-		if err != nil {
-			cmd.recordset.Errors <- newNodeError(cmd.node, err)
-			return err
-		}
-
-		iobj := indirect(obj)
-		if err := setObjectField(cmd.resObjMappings, iobj, name, value); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }

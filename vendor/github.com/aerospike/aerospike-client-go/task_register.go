@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import (
 
 // RegisterTask is used to poll for UDF registration completion.
 type RegisterTask struct {
-	*BaseTask
+	*baseTask
 
 	packageName string
 }
@@ -28,7 +28,7 @@ type RegisterTask struct {
 // NewRegisterTask initializes a RegisterTask with fields needed to query server nodes.
 func NewRegisterTask(cluster *Cluster, packageName string) *RegisterTask {
 	return &RegisterTask{
-		BaseTask:    NewTask(cluster, false),
+		baseTask:    newTask(cluster, false),
 		packageName: packageName,
 	}
 }
@@ -40,7 +40,7 @@ func (tskr *RegisterTask) IsDone() (bool, error) {
 	done := false
 
 	for _, node := range nodes {
-		responseMap, err := RequestNodeInfo(node, command)
+		responseMap, err := node.RequestInfo(command)
 		if err != nil {
 			return false, err
 		}

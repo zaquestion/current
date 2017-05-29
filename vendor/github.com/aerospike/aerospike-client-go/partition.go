@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,13 +29,20 @@ type Partition struct {
 // NewPartitionByKey initializes a partition and determines the Partition Id
 // from key digest automatically.
 func NewPartitionByKey(key *Key) *Partition {
-	return &Partition{
+	partition := newPartitionByKey(key)
+	return &partition
+}
+
+// newPartitionByKey initializes a partition and determines the Partition Id
+// from key digest automatically. It return the struct itself, and not the address
+func newPartitionByKey(key *Key) Partition {
+	return Partition{
 		Namespace: key.namespace,
 
 		// CAN'T USE MOD directly - mod will give negative numbers.
 		// First AND makes positive and negative correctly, then mod.
 		// For any x, y : x % 2^y = x & (2^y - 1); the second method is twice as fast
-		PartitionId: int(Buffer.LittleBytesToInt32(key.digest, 0)&0xFFFF) & (_PARTITIONS - 1),
+		PartitionId: int(Buffer.LittleBytesToInt32(key.digest[:], 0)&0xFFFF) & (_PARTITIONS - 1),
 	}
 }
 

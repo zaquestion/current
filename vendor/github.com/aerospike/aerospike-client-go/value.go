@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,18 +15,17 @@
 package aerospike
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"reflect"
 	"strconv"
-	"strings"
 
-	// . "github.com/aerospike/aerospike-client-go/logger"
 	. "github.com/aerospike/aerospike-client-go/types"
 	ParticleType "github.com/aerospike/aerospike-client-go/types/particle_type"
 	Buffer "github.com/aerospike/aerospike-client-go/utils/buffer"
 )
+
+// this function will be set in value_slow file if included
+var newValueReflect func(interface{}) Value
 
 // Map pair is used when the client returns sorted maps from the server
 // Since the default map in Go is a hash map, we will use a slice
@@ -37,13 +36,13 @@ type MapPair struct{ Key, Value interface{} }
 type Value interface {
 
 	// Calculate number of vl.bytes necessary to serialize the value in the wire protocol.
-	estimateSize() int
+	estimateSize() (int, error)
 
 	// Serialize the value in the wire protocol.
-	write(buffer []byte, offset int) (int, error)
+	write(cmd BufferEx) (int, error)
 
 	// Serialize the value using MessagePack.
-	pack(packer *packer) error
+	pack(cmd BufferEx) (int, error)
 
 	// GetType returns wire protocol value type.
 	GetType() int
@@ -53,12 +52,8 @@ type Value interface {
 
 	// String implements Stringer interface.
 	String() string
-
-	reader() io.Reader
 }
 
-// AerospikeBlob defines an interface to automatically
-// encode an object to a []byte.
 type AerospikeBlob interface {
 	// EncodeBlob returns a byte slice representing the encoding of the
 	// receiver for transmission to a Decoder, usually of the same
@@ -66,82 +61,381 @@ type AerospikeBlob interface {
 	EncodeBlob() ([]byte, error)
 }
 
-// NewValue generates a new Value object based on the type.
-// If the type is not supported, NewValue will panic.
-func NewValue(v interface{}) Value {
+// tryConcreteValue will return an aerospike value.
+// If the encoder does not exists, it will not try to use reflection.
+func tryConcreteValue(v interface{}) Value {
 	switch val := v.(type) {
-	case nil:
-		return &NullValue{}
+	case Value:
+		return val
 	case int:
-		return NewIntegerValue(val)
+		return IntegerValue(val)
 	case int64:
-		return NewLongValue(val)
+		return LongValue(val)
 	case string:
-		return NewStringValue(val)
+		return StringValue(val)
+	case []interface{}:
+		return ListValue(val)
+	case map[string]interface{}:
+		return JsonValue(val)
+	case map[interface{}]interface{}:
+		return NewMapValue(val)
+	case nil:
+		return nullValue
 	case []Value:
 		return NewValueArray(val)
 	case []byte:
-		return NewBytesValue(val)
+		return BytesValue(val)
 	case int8:
-		return NewIntegerValue(int(val))
+		return IntegerValue(int(val))
 	case int16:
-		return NewIntegerValue(int(val))
+		return IntegerValue(int(val))
 	case int32:
-		return NewIntegerValue(int(val))
+		return IntegerValue(int(val))
 	case uint8: // byte supported here
-		return NewIntegerValue(int(val))
+		return IntegerValue(int(val))
 	case uint16:
-		return NewIntegerValue(int(val))
+		return IntegerValue(int(val))
 	case uint32:
-		return NewIntegerValue(int(val))
+		return IntegerValue(int(val))
 	case float32:
-		return NewFloatValue(float64(val))
+		return FloatValue(float64(val))
 	case float64:
-		return NewFloatValue(val)
+		return FloatValue(val)
 	case uint:
-		maxInt := ^uint(0) >> 1
-		if !Buffer.Arch64Bits || (val <= maxInt) {
-			return NewLongValue(int64(val))
+		// if it doesn't overflow int64, it is OK
+		if int64(val) >= 0 {
+			return LongValue(int64(val))
 		}
-	case []interface{}:
-		return NewListValue(val)
-	case map[interface{}]interface{}:
-		return NewMapValue(val)
-	case Value:
-		return val
+	case MapIter:
+		return NewMapperValue(val)
+	case ListIter:
+		return NewListerValue(val)
 	case AerospikeBlob:
 		return NewBlobValue(val)
+
+	/*
+		The following cases will try to avoid using reflection by matching against the
+		internal generic types.
+		If you have custom type aliases in your code, you can use the same aerospike types to cast your type into,
+		to avoid hitting the generics.
+	*/
+	case []string:
+		return NewListerValue(stringSlice(val))
+	case []int:
+		return NewListerValue(intSlice(val))
+	case []int8:
+		return NewListerValue(int8Slice(val))
+	case []int16:
+		return NewListerValue(int16Slice(val))
+	case []int32:
+		return NewListerValue(int32Slice(val))
+	case []int64:
+		return NewListerValue(int64Slice(val))
+	case []uint16:
+		return NewListerValue(uint16Slice(val))
+	case []uint32:
+		return NewListerValue(uint32Slice(val))
+	case []uint64:
+		return NewListerValue(uint64Slice(val))
+	case []float32:
+		return NewListerValue(float32Slice(val))
+	case []float64:
+		return NewListerValue(float64Slice(val))
+	case map[string]string:
+		return NewMapperValue(stringStringMap(val))
+	case map[string]int:
+		return NewMapperValue(stringIntMap(val))
+	case map[string]int8:
+		return NewMapperValue(stringInt8Map(val))
+	case map[string]int16:
+		return NewMapperValue(stringInt16Map(val))
+	case map[string]int32:
+		return NewMapperValue(stringInt32Map(val))
+	case map[string]int64:
+		return NewMapperValue(stringInt64Map(val))
+	case map[string]uint16:
+		return NewMapperValue(stringUint16Map(val))
+	case map[string]uint32:
+		return NewMapperValue(stringUint32Map(val))
+	case map[string]float32:
+		return NewMapperValue(stringFloat32Map(val))
+	case map[string]float64:
+		return NewMapperValue(stringFloat64Map(val))
+	case map[int]string:
+		return NewMapperValue(intStringMap(val))
+	case map[int]int:
+		return NewMapperValue(intIntMap(val))
+	case map[int]int8:
+		return NewMapperValue(intInt8Map(val))
+	case map[int]int16:
+		return NewMapperValue(intInt16Map(val))
+	case map[int]int32:
+		return NewMapperValue(intInt32Map(val))
+	case map[int]int64:
+		return NewMapperValue(intInt64Map(val))
+	case map[int]uint16:
+		return NewMapperValue(intUint16Map(val))
+	case map[int]uint32:
+		return NewMapperValue(intUint32Map(val))
+	case map[int]float32:
+		return NewMapperValue(intFloat32Map(val))
+	case map[int]float64:
+		return NewMapperValue(intFloat64Map(val))
+	case map[int]interface{}:
+		return NewMapperValue(intInterfaceMap(val))
+	case map[int8]string:
+		return NewMapperValue(int8StringMap(val))
+	case map[int8]int:
+		return NewMapperValue(int8IntMap(val))
+	case map[int8]int8:
+		return NewMapperValue(int8Int8Map(val))
+	case map[int8]int16:
+		return NewMapperValue(int8Int16Map(val))
+	case map[int8]int32:
+		return NewMapperValue(int8Int32Map(val))
+	case map[int8]int64:
+		return NewMapperValue(int8Int64Map(val))
+	case map[int8]uint16:
+		return NewMapperValue(int8Uint16Map(val))
+	case map[int8]uint32:
+		return NewMapperValue(int8Uint32Map(val))
+	case map[int8]float32:
+		return NewMapperValue(int8Float32Map(val))
+	case map[int8]float64:
+		return NewMapperValue(int8Float64Map(val))
+	case map[int8]interface{}:
+		return NewMapperValue(int8InterfaceMap(val))
+	case map[int16]string:
+		return NewMapperValue(int16StringMap(val))
+	case map[int16]int:
+		return NewMapperValue(int16IntMap(val))
+	case map[int16]int8:
+		return NewMapperValue(int16Int8Map(val))
+	case map[int16]int16:
+		return NewMapperValue(int16Int16Map(val))
+	case map[int16]int32:
+		return NewMapperValue(int16Int32Map(val))
+	case map[int16]int64:
+		return NewMapperValue(int16Int64Map(val))
+	case map[int16]uint16:
+		return NewMapperValue(int16Uint16Map(val))
+	case map[int16]uint32:
+		return NewMapperValue(int16Uint32Map(val))
+	case map[int16]float32:
+		return NewMapperValue(int16Float32Map(val))
+	case map[int16]float64:
+		return NewMapperValue(int16Float64Map(val))
+	case map[int16]interface{}:
+		return NewMapperValue(int16InterfaceMap(val))
+	case map[int32]string:
+		return NewMapperValue(int32StringMap(val))
+	case map[int32]int:
+		return NewMapperValue(int32IntMap(val))
+	case map[int32]int8:
+		return NewMapperValue(int32Int8Map(val))
+	case map[int32]int16:
+		return NewMapperValue(int32Int16Map(val))
+	case map[int32]int32:
+		return NewMapperValue(int32Int32Map(val))
+	case map[int32]int64:
+		return NewMapperValue(int32Int64Map(val))
+	case map[int32]uint16:
+		return NewMapperValue(int32Uint16Map(val))
+	case map[int32]uint32:
+		return NewMapperValue(int32Uint32Map(val))
+	case map[int32]float32:
+		return NewMapperValue(int32Float32Map(val))
+	case map[int32]float64:
+		return NewMapperValue(int32Float64Map(val))
+	case map[int32]interface{}:
+		return NewMapperValue(int32InterfaceMap(val))
+	case map[int64]string:
+		return NewMapperValue(int64StringMap(val))
+	case map[int64]int:
+		return NewMapperValue(int64IntMap(val))
+	case map[int64]int8:
+		return NewMapperValue(int64Int8Map(val))
+	case map[int64]int16:
+		return NewMapperValue(int64Int16Map(val))
+	case map[int64]int32:
+		return NewMapperValue(int64Int32Map(val))
+	case map[int64]int64:
+		return NewMapperValue(int64Int64Map(val))
+	case map[int64]uint16:
+		return NewMapperValue(int64Uint16Map(val))
+	case map[int64]uint32:
+		return NewMapperValue(int64Uint32Map(val))
+	case map[int64]float32:
+		return NewMapperValue(int64Float32Map(val))
+	case map[int64]float64:
+		return NewMapperValue(int64Float64Map(val))
+	case map[int64]interface{}:
+		return NewMapperValue(int64InterfaceMap(val))
+	case map[uint16]string:
+		return NewMapperValue(uint16StringMap(val))
+	case map[uint16]int:
+		return NewMapperValue(uint16IntMap(val))
+	case map[uint16]int8:
+		return NewMapperValue(uint16Int8Map(val))
+	case map[uint16]int16:
+		return NewMapperValue(uint16Int16Map(val))
+	case map[uint16]int32:
+		return NewMapperValue(uint16Int32Map(val))
+	case map[uint16]int64:
+		return NewMapperValue(uint16Int64Map(val))
+	case map[uint16]uint16:
+		return NewMapperValue(uint16Uint16Map(val))
+	case map[uint16]uint32:
+		return NewMapperValue(uint16Uint32Map(val))
+	case map[uint16]float32:
+		return NewMapperValue(uint16Float32Map(val))
+	case map[uint16]float64:
+		return NewMapperValue(uint16Float64Map(val))
+	case map[uint16]interface{}:
+		return NewMapperValue(uint16InterfaceMap(val))
+	case map[uint32]string:
+		return NewMapperValue(uint32StringMap(val))
+	case map[uint32]int:
+		return NewMapperValue(uint32IntMap(val))
+	case map[uint32]int8:
+		return NewMapperValue(uint32Int8Map(val))
+	case map[uint32]int16:
+		return NewMapperValue(uint32Int16Map(val))
+	case map[uint32]int32:
+		return NewMapperValue(uint32Int32Map(val))
+	case map[uint32]int64:
+		return NewMapperValue(uint32Int64Map(val))
+	case map[uint32]uint16:
+		return NewMapperValue(uint32Uint16Map(val))
+	case map[uint32]uint32:
+		return NewMapperValue(uint32Uint32Map(val))
+	case map[uint32]float32:
+		return NewMapperValue(uint32Float32Map(val))
+	case map[uint32]float64:
+		return NewMapperValue(uint32Float64Map(val))
+	case map[uint32]interface{}:
+		return NewMapperValue(uint32InterfaceMap(val))
+	case map[float32]string:
+		return NewMapperValue(float32StringMap(val))
+	case map[float32]int:
+		return NewMapperValue(float32IntMap(val))
+	case map[float32]int8:
+		return NewMapperValue(float32Int8Map(val))
+	case map[float32]int16:
+		return NewMapperValue(float32Int16Map(val))
+	case map[float32]int32:
+		return NewMapperValue(float32Int32Map(val))
+	case map[float32]int64:
+		return NewMapperValue(float32Int64Map(val))
+	case map[float32]uint16:
+		return NewMapperValue(float32Uint16Map(val))
+	case map[float32]uint32:
+		return NewMapperValue(float32Uint32Map(val))
+	case map[float32]float32:
+		return NewMapperValue(float32Float32Map(val))
+	case map[float32]float64:
+		return NewMapperValue(float32Float64Map(val))
+	case map[float32]interface{}:
+		return NewMapperValue(float32InterfaceMap(val))
+	case map[float64]string:
+		return NewMapperValue(float64StringMap(val))
+	case map[float64]int:
+		return NewMapperValue(float64IntMap(val))
+	case map[float64]int8:
+		return NewMapperValue(float64Int8Map(val))
+	case map[float64]int16:
+		return NewMapperValue(float64Int16Map(val))
+	case map[float64]int32:
+		return NewMapperValue(float64Int32Map(val))
+	case map[float64]int64:
+		return NewMapperValue(float64Int64Map(val))
+	case map[float64]uint16:
+		return NewMapperValue(float64Uint16Map(val))
+	case map[float64]uint32:
+		return NewMapperValue(float64Uint32Map(val))
+	case map[float64]float32:
+		return NewMapperValue(float64Float32Map(val))
+	case map[float64]float64:
+		return NewMapperValue(float64Float64Map(val))
+	case map[float64]interface{}:
+		return NewMapperValue(float64InterfaceMap(val))
+	case map[string]uint64:
+		return NewMapperValue(stringUint64Map(val))
+	case map[int]uint64:
+		return NewMapperValue(intUint64Map(val))
+	case map[int8]uint64:
+		return NewMapperValue(int8Uint64Map(val))
+	case map[int16]uint64:
+		return NewMapperValue(int16Uint64Map(val))
+	case map[int32]uint64:
+		return NewMapperValue(int32Uint64Map(val))
+	case map[int64]uint64:
+		return NewMapperValue(int64Uint64Map(val))
+	case map[uint16]uint64:
+		return NewMapperValue(uint16Uint64Map(val))
+	case map[uint32]uint64:
+		return NewMapperValue(uint32Uint64Map(val))
+	case map[float32]uint64:
+		return NewMapperValue(float32Uint64Map(val))
+	case map[float64]uint64:
+		return NewMapperValue(float64Uint64Map(val))
+	case map[uint64]string:
+		return NewMapperValue(uint64StringMap(val))
+	case map[uint64]int:
+		return NewMapperValue(uint64IntMap(val))
+	case map[uint64]int8:
+		return NewMapperValue(uint64Int8Map(val))
+	case map[uint64]int16:
+		return NewMapperValue(uint64Int16Map(val))
+	case map[uint64]int32:
+		return NewMapperValue(uint64Int32Map(val))
+	case map[uint64]int64:
+		return NewMapperValue(uint64Int64Map(val))
+	case map[uint64]uint16:
+		return NewMapperValue(uint64Uint16Map(val))
+	case map[uint64]uint32:
+		return NewMapperValue(uint64Uint32Map(val))
+	case map[uint64]uint64:
+		return NewMapperValue(uint64Uint64Map(val))
+	case map[uint64]float32:
+		return NewMapperValue(uint64Float32Map(val))
+	case map[uint64]float64:
+		return NewMapperValue(uint64Float64Map(val))
+	case map[uint64]interface{}:
+		return NewMapperValue(uint64InterfaceMap(val))
 	}
 
-	// check for array and map
-	rv := reflect.ValueOf(v)
-	switch rv.Kind() {
-	case reflect.Array, reflect.Slice:
-		l := rv.Len()
-		arr := make([]interface{}, l)
-		for i := 0; i < l; i++ {
-			arr[i] = rv.Index(i).Interface()
-		}
+	return nil
+}
 
-		return NewListValue(arr)
-	case reflect.Map:
-		l := rv.Len()
-		amap := make(map[interface{}]interface{}, l)
-		for _, i := range rv.MapKeys() {
-			amap[i.Interface()] = rv.MapIndex(i).Interface()
-		}
+// NewValue generates a new Value object based on the type.
+// If the type is not supported, NewValue will panic.
+// This method is a convenience method, and should not be used
+// when absolute performance is required unless for the reason mentioned below.
+//
+// If you have custom maps or slices like:
+//     type MyMap map[primitive1]primitive2, eg: map[int]string
+// or
+//     type MySlice []primitive, eg: []float64
+// cast them to their primitive type when passing them to this method:
+//     v := NewValue(map[int]string(myVar))
+//     v := NewValue([]float64(myVar))
+// This way you will avoid hitting reflection.
+// To completely avoid reflection in the library,
+// use the build tag: as_performance while building your program.
+func NewValue(v interface{}) Value {
+	if value := tryConcreteValue(v); value != nil {
+		return value
+	}
 
-		return NewMapValue(amap)
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return NewLongValue(reflect.ValueOf(v).Int())
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32:
-		return NewLongValue(int64(reflect.ValueOf(v).Uint()))
-	case reflect.String:
-		return NewStringValue(rv.String())
+	if newValueReflect != nil {
+		if res := newValueReflect(v); res != nil {
+			return res
+		}
 	}
 
 	// panic for anything that is not supported.
-	panic(NewAerospikeError(TYPE_NOT_SUPPORTED, "Value type '"+reflect.TypeOf(v).Name()+"' not supported"))
+	panic(NewAerospikeError(TYPE_NOT_SUPPORTED, fmt.Sprintf("Value type '%v' (%s) not supported (if you are compiling via 'as_performance' tag, use cast either to primitives, or use ListIter or MapIter interfaces.)", v, reflect.TypeOf(v).String())))
 }
 
 // NullValue is an empty value.
@@ -154,16 +448,16 @@ func NewNullValue() NullValue {
 	return nullValue
 }
 
-func (vl NullValue) estimateSize() int {
-	return 0
-}
-
-func (vl NullValue) write(buffer []byte, offset int) (int, error) {
+func (vl NullValue) estimateSize() (int, error) {
 	return 0, nil
 }
 
-func (vl NullValue) pack(packer *packer) error {
-	return packer.PackNil()
+func (vl NullValue) write(cmd BufferEx) (int, error) {
+	return 0, nil
+}
+
+func (vl NullValue) pack(cmd BufferEx) (int, error) {
+	return __PackNil(cmd)
 }
 
 // GetType returns wire protocol value type.
@@ -176,11 +470,6 @@ func (vl NullValue) GetObject() interface{} {
 	return nil
 }
 
-func (vl NullValue) reader() io.Reader {
-	return nil
-}
-
-// String implements Stringer interface.
 func (vl NullValue) String() string {
 	return ""
 }
@@ -207,17 +496,16 @@ func NewBlobValue(object AerospikeBlob) BytesValue {
 	return NewBytesValue(buf)
 }
 
-func (vl BytesValue) estimateSize() int {
-	return len(vl)
+func (vl BytesValue) estimateSize() (int, error) {
+	return len(vl), nil
 }
 
-func (vl BytesValue) write(buffer []byte, offset int) (int, error) {
-	len := copy(buffer[offset:], vl)
-	return len, nil
+func (vl BytesValue) write(cmd BufferEx) (int, error) {
+	return cmd.Write(vl)
 }
 
-func (vl BytesValue) pack(packer *packer) error {
-	return packer.PackBytes(vl)
+func (vl BytesValue) pack(cmd BufferEx) (int, error) {
+	return __PackBytes(cmd, vl)
 }
 
 // GetType returns wire protocol value type.
@@ -228,10 +516,6 @@ func (vl BytesValue) GetType() int {
 // GetObject returns original value as an interface{}.
 func (vl BytesValue) GetObject() interface{} {
 	return []byte(vl)
-}
-
-func (vl BytesValue) reader() io.Reader {
-	return bytes.NewReader(vl)
 }
 
 // String implements Stringer interface.
@@ -249,16 +533,16 @@ func NewStringValue(value string) StringValue {
 	return StringValue(value)
 }
 
-func (vl StringValue) estimateSize() int {
-	return len(vl)
+func (vl StringValue) estimateSize() (int, error) {
+	return len(vl), nil
 }
 
-func (vl StringValue) write(buffer []byte, offset int) (int, error) {
-	return copy(buffer[offset:], vl), nil
+func (vl StringValue) write(cmd BufferEx) (int, error) {
+	return cmd.WriteString(string(vl))
 }
 
-func (vl StringValue) pack(packer *packer) error {
-	return packer.PackString(string(vl))
+func (vl StringValue) pack(cmd BufferEx) (int, error) {
+	return __PackString(cmd, string(vl))
 }
 
 // GetType returns wire protocol value type.
@@ -269,10 +553,6 @@ func (vl StringValue) GetType() int {
 // GetObject returns original value as an interface{}.
 func (vl StringValue) GetObject() interface{} {
 	return string(vl)
-}
-
-func (vl StringValue) reader() io.Reader {
-	return strings.NewReader(string(vl))
 }
 
 // String implements Stringer interface.
@@ -290,21 +570,16 @@ func NewIntegerValue(value int) IntegerValue {
 	return IntegerValue(value)
 }
 
-func (vl IntegerValue) estimateSize() int {
-	return 8
-}
-
-func (vl IntegerValue) write(buffer []byte, offset int) (int, error) {
-	Buffer.Int64ToBytes(int64(vl), buffer, offset)
+func (vl IntegerValue) estimateSize() (int, error) {
 	return 8, nil
 }
 
-func (vl IntegerValue) pack(packer *packer) error {
-	if Buffer.SizeOfInt == Buffer.SizeOfInt32 {
-		return packer.PackAInt(int(vl))
-	} else {
-		return packer.PackALong(int64(vl))
-	}
+func (vl IntegerValue) write(cmd BufferEx) (int, error) {
+	return cmd.WriteInt64(int64(vl))
+}
+
+func (vl IntegerValue) pack(cmd BufferEx) (int, error) {
+	return __PackAInt64(cmd, int64(vl))
 }
 
 // GetType returns wire protocol value type.
@@ -315,10 +590,6 @@ func (vl IntegerValue) GetType() int {
 // GetObject returns original value as an interface{}.
 func (vl IntegerValue) GetObject() interface{} {
 	return int(vl)
-}
-
-func (vl IntegerValue) reader() io.Reader {
-	return bytes.NewReader(Buffer.Int64ToBytes(int64(vl), nil, 0))
 }
 
 // String implements Stringer interface.
@@ -336,17 +607,16 @@ func NewLongValue(value int64) LongValue {
 	return LongValue(value)
 }
 
-func (vl LongValue) estimateSize() int {
-	return 8
-}
-
-func (vl LongValue) write(buffer []byte, offset int) (int, error) {
-	Buffer.Int64ToBytes(int64(vl), buffer, offset)
+func (vl LongValue) estimateSize() (int, error) {
 	return 8, nil
 }
 
-func (vl LongValue) pack(packer *packer) error {
-	return packer.PackALong(int64(vl))
+func (vl LongValue) write(cmd BufferEx) (int, error) {
+	return cmd.WriteInt64(int64(vl))
+}
+
+func (vl LongValue) pack(cmd BufferEx) (int, error) {
+	return __PackAInt64(cmd, int64(vl))
 }
 
 // GetType returns wire protocol value type.
@@ -357,10 +627,6 @@ func (vl LongValue) GetType() int {
 // GetObject returns original value as an interface{}.
 func (vl LongValue) GetObject() interface{} {
 	return int64(vl)
-}
-
-func (vl LongValue) reader() io.Reader {
-	return bytes.NewReader(Buffer.Int64ToBytes(int64(vl), nil, 0))
 }
 
 // String implements Stringer interface.
@@ -378,17 +644,16 @@ func NewFloatValue(value float64) FloatValue {
 	return FloatValue(value)
 }
 
-func (vl FloatValue) estimateSize() int {
-	return 8
-}
-
-func (vl FloatValue) write(buffer []byte, offset int) (int, error) {
-	Buffer.Float64ToBytes(float64(vl), buffer, offset)
+func (vl FloatValue) estimateSize() (int, error) {
 	return 8, nil
 }
 
-func (vl FloatValue) pack(packer *packer) error {
-	return packer.PackFloat64(float64(vl))
+func (vl FloatValue) write(cmd BufferEx) (int, error) {
+	return cmd.WriteFloat64(float64(vl))
+}
+
+func (vl FloatValue) pack(cmd BufferEx) (int, error) {
+	return __PackFloat64(cmd, float64(vl))
 }
 
 // GetType returns wire protocol value type.
@@ -401,10 +666,6 @@ func (vl FloatValue) GetObject() interface{} {
 	return float64(vl)
 }
 
-func (vl FloatValue) reader() io.Reader {
-	return bytes.NewReader(Buffer.Float64ToBytes(float64(vl), nil, 0))
-}
-
 // String implements Stringer interface.
 func (vl FloatValue) String() string {
 	return (fmt.Sprintf("%f", vl))
@@ -414,14 +675,12 @@ func (vl FloatValue) String() string {
 
 // ValueArray encapsulates an array of Value.
 // Supported by Aerospike 3 servers only.
-type ValueArray struct {
-	array []Value
-	bytes []byte
-}
+type ValueArray []Value
 
 // ToValueSlice converts a []interface{} to []Value.
 // It will panic if any of array element types are not supported.
 func ToValueSlice(array []interface{}) []Value {
+	// TODO: Do something about this method
 	res := make([]Value, 0, len(array))
 	for i := range array {
 		res = append(res, NewValue(array[i]))
@@ -437,98 +696,117 @@ func ToValueArray(array []interface{}) *ValueArray {
 
 // NewValueArray generates a ValueArray instance.
 func NewValueArray(array []Value) *ValueArray {
-	res := &ValueArray{
-		array: array,
-	}
-
-	res.bytes, _ = packValueArray(array)
-
-	return res
+	// return &ValueArray{*NewListerValue(valueList(array))}
+	res := ValueArray(array)
+	return &res
 }
 
-func (vl *ValueArray) estimateSize() int {
-	return len(vl.bytes)
+func (va ValueArray) estimateSize() (int, error) {
+	return __PackValueArray(nil, va)
 }
 
-func (vl *ValueArray) write(buffer []byte, offset int) (int, error) {
-	res := copy(buffer[offset:], vl.bytes)
-	return res, nil
+func (va ValueArray) write(cmd BufferEx) (int, error) {
+	return __PackValueArray(cmd, va)
 }
 
-func (vl *ValueArray) pack(packer *packer) error {
-	return packer.packValueArray(vl.array)
+func (va ValueArray) pack(cmd BufferEx) (int, error) {
+	return __PackValueArray(cmd, []Value(va))
 }
 
 // GetType returns wire protocol value type.
-func (vl *ValueArray) GetType() int {
+func (va ValueArray) GetType() int {
 	return ParticleType.LIST
 }
 
 // GetObject returns original value as an interface{}.
-func (vl *ValueArray) GetObject() interface{} {
-	return vl.array
-}
-
-func (vl *ValueArray) reader() io.Reader {
-	return bytes.NewReader(vl.bytes)
+func (va ValueArray) GetObject() interface{} {
+	return va
 }
 
 // String implements Stringer interface.
-func (vl *ValueArray) String() string {
-	return fmt.Sprintf("%v", vl.array)
+func (va ValueArray) String() string {
+	return fmt.Sprintf("%v", []Value(va))
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
 // ListValue encapsulates any arbitrary array.
 // Supported by Aerospike 3 servers only.
-type ListValue struct {
-	list  []interface{}
-	bytes []byte
-}
+type ListValue []interface{}
 
 // NewListValue generates a ListValue instance.
-func NewListValue(list []interface{}) *ListValue {
-	res := &ListValue{
-		list: list,
-	}
-
-	res.bytes, _ = packAnyArray(list)
-
-	return res
+func NewListValue(list []interface{}) ListValue {
+	return ListValue(list)
 }
 
-func (vl *ListValue) estimateSize() int {
-	return len(vl.bytes)
+func (vl ListValue) estimateSize() (int, error) {
+	return __PackIfcList(nil, vl)
 }
 
-func (vl *ListValue) write(buffer []byte, offset int) (int, error) {
-	l := copy(buffer[offset:], vl.bytes)
-	return l, nil
+func (vl ListValue) write(cmd BufferEx) (int, error) {
+	return __PackIfcList(cmd, vl)
 }
 
-func (vl *ListValue) pack(packer *packer) error {
-	// return packer.PackList(vl.list)
-	_, err := packer.buffer.Write(vl.bytes)
-	return err
+func (vl ListValue) pack(cmd BufferEx) (int, error) {
+	return __PackIfcList(cmd, []interface{}(vl))
 }
 
 // GetType returns wire protocol value type.
-func (vl *ListValue) GetType() int {
+func (vl ListValue) GetType() int {
 	return ParticleType.LIST
 }
 
 // GetObject returns original value as an interface{}.
-func (vl *ListValue) GetObject() interface{} {
-	return vl.list
-}
-
-func (vl *ListValue) reader() io.Reader {
-	return bytes.NewReader(vl.bytes)
+func (vl ListValue) GetObject() interface{} {
+	return vl
 }
 
 // String implements Stringer interface.
-func (vl *ListValue) String() string {
+func (vl ListValue) String() string {
+	return fmt.Sprintf("%v", []interface{}(vl))
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+// ListValue encapsulates any arbitrary array.
+// Supported by Aerospike 3 servers only.
+type ListerValue struct {
+	list ListIter
+}
+
+// NewListValue generates a ListValue instance.
+func NewListerValue(list ListIter) *ListerValue {
+	res := &ListerValue{
+		list: list,
+	}
+
+	return res
+}
+
+func (vl *ListerValue) estimateSize() (int, error) {
+	return __PackList(nil, vl.list)
+}
+
+func (vl *ListerValue) write(cmd BufferEx) (int, error) {
+	return __PackList(cmd, vl.list)
+}
+
+func (vl *ListerValue) pack(cmd BufferEx) (int, error) {
+	return __PackList(cmd, vl.list)
+}
+
+// GetType returns wire protocol value type.
+func (vl *ListerValue) GetType() int {
+	return ParticleType.LIST
+}
+
+// GetObject returns original value as an interface{}.
+func (vl *ListerValue) GetObject() interface{} {
+	return vl.list
+}
+
+// String implements Stringer interface.
+func (vl *ListerValue) String() string {
 	return fmt.Sprintf("%v", vl.list)
 }
 
@@ -536,58 +814,122 @@ func (vl *ListValue) String() string {
 
 // MapValue encapsulates an arbitrary map.
 // Supported by Aerospike 3 servers only.
-type MapValue struct {
-	vmap  map[interface{}]interface{}
-	bytes []byte
-}
+type MapValue map[interface{}]interface{}
 
 // NewMapValue generates a MapValue instance.
-func NewMapValue(vmap map[interface{}]interface{}) *MapValue {
-	res := &MapValue{
-		vmap: vmap,
-	}
-
-	res.bytes, _ = packAnyMap(vmap)
-
-	return res
+func NewMapValue(vmap map[interface{}]interface{}) MapValue {
+	return MapValue(vmap)
 }
 
-func (vl *MapValue) estimateSize() int {
-	return len(vl.bytes)
+func (vl MapValue) estimateSize() (int, error) {
+	return __PackIfcMap(nil, vl)
 }
 
-func (vl *MapValue) write(buffer []byte, offset int) (int, error) {
-	return copy(buffer[offset:], vl.bytes), nil
+func (vl MapValue) write(cmd BufferEx) (int, error) {
+	return __PackIfcMap(cmd, vl)
 }
 
-func (vl *MapValue) pack(packer *packer) error {
-	// return packer.PackMap(vl.vmap)
-	_, err := packer.buffer.Write(vl.bytes)
-	return err
+func (vl MapValue) pack(cmd BufferEx) (int, error) {
+	return __PackIfcMap(cmd, vl)
 }
 
 // GetType returns wire protocol value type.
-func (vl *MapValue) GetType() int {
+func (vl MapValue) GetType() int {
 	return ParticleType.MAP
 }
 
 // GetObject returns original value as an interface{}.
-func (vl *MapValue) GetObject() interface{} {
+func (vl MapValue) GetObject() interface{} {
+	return vl
+}
+
+func (vl MapValue) String() string {
+	return fmt.Sprintf("%v", map[interface{}]interface{}(vl))
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+// JsonValue encapsulates a Json map.
+// Supported by Aerospike 3 servers only.
+type JsonValue map[string]interface{}
+
+// NewMapValue generates a JsonValue instance.
+func NewJsonValue(vmap map[string]interface{}) JsonValue {
+	return JsonValue(vmap)
+}
+
+func (vl JsonValue) estimateSize() (int, error) {
+	return __PackJsonMap(nil, vl)
+}
+
+func (vl JsonValue) write(cmd BufferEx) (int, error) {
+	return __PackJsonMap(cmd, vl)
+}
+
+func (vl JsonValue) pack(cmd BufferEx) (int, error) {
+	return __PackJsonMap(cmd, vl)
+}
+
+// GetType returns wire protocol value type.
+func (vl JsonValue) GetType() int {
+	return ParticleType.MAP
+}
+
+// GetObject returns original value as an interface{}.
+func (vl JsonValue) GetObject() interface{} {
+	return vl
+}
+
+func (vl JsonValue) String() string {
+	return fmt.Sprintf("%v", map[string]interface{}(vl))
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+// MapperValue encapsulates an arbitrary map which implements a MapIter interface.
+// Supported by Aerospike 3 servers only.
+type MapperValue struct {
+	vmap MapIter
+}
+
+// NewMapValue generates a MapperValue instance.
+func NewMapperValue(vmap MapIter) *MapperValue {
+	res := &MapperValue{
+		vmap: vmap,
+	}
+
+	return res
+}
+
+func (vl *MapperValue) estimateSize() (int, error) {
+	return __PackMap(nil, vl.vmap)
+}
+
+func (vl *MapperValue) write(cmd BufferEx) (int, error) {
+	return __PackMap(cmd, vl.vmap)
+}
+
+func (vl *MapperValue) pack(cmd BufferEx) (int, error) {
+	return __PackMap(cmd, vl.vmap)
+}
+
+// GetType returns wire protocol value type.
+func (vl *MapperValue) GetType() int {
+	return ParticleType.MAP
+}
+
+// GetObject returns original value as an interface{}.
+func (vl *MapperValue) GetObject() interface{} {
 	return vl.vmap
 }
 
-func (vl *MapValue) reader() io.Reader {
-	return bytes.NewReader(vl.bytes)
-}
-
-// String implements Stringer interface.
-func (vl *MapValue) String() string {
+func (vl *MapperValue) String() string {
 	return fmt.Sprintf("%v", vl.vmap)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// MapValue encapsulates a 2D Geo point.
+// GeoJSONValue encapsulates a 2D Geo point.
 // Supported by Aerospike 3.6.1 servers only.
 type GeoJSONValue string
 
@@ -597,21 +939,21 @@ func NewGeoJSONValue(value string) GeoJSONValue {
 	return res
 }
 
-func (vl GeoJSONValue) estimateSize() int {
+func (vl GeoJSONValue) estimateSize() (int, error) {
 	// flags + ncells + jsonstr
-	return 1 + 2 + len(string(vl))
+	return 1 + 2 + len(string(vl)), nil
 }
 
-func (vl GeoJSONValue) write(buffer []byte, offset int) (int, error) {
-	buffer[offset] = 0   // flags
-	buffer[offset+1] = 0 // flags
-	buffer[offset+2] = 0 // flags
+func (vl GeoJSONValue) write(cmd BufferEx) (int, error) {
+	cmd.WriteByte(0) // flags
+	cmd.WriteByte(0) // flags
+	cmd.WriteByte(0) // flags
 
-	return 1 + 2 + copy(buffer[offset+3:], string(vl)), nil
+	return cmd.WriteString(string(vl))
 }
 
-func (vl GeoJSONValue) pack(packer *packer) error {
-	return packer.PackGeoJson(string(vl))
+func (vl GeoJSONValue) pack(cmd BufferEx) (int, error) {
+	return __PackGeoJson(cmd, string(vl))
 }
 
 // GetType returns wire protocol value type.
@@ -622,10 +964,6 @@ func (vl GeoJSONValue) GetType() int {
 // GetObject returns original value as an interface{}.
 func (vl GeoJSONValue) GetObject() interface{} {
 	return string(vl)
-}
-
-func (vl GeoJSONValue) reader() io.Reader {
-	return strings.NewReader(string(vl))
 }
 
 // String implements Stringer interface.
@@ -639,32 +977,37 @@ func bytesToParticle(ptype int, buf []byte, offset int, length int) (interface{}
 
 	switch ptype {
 	case ParticleType.INTEGER:
-		return Buffer.BytesToNumber(buf, offset, length), nil
+		// return `int` for 64bit platforms for compatibility reasons
+		if Buffer.Arch64Bits {
+			return int(Buffer.VarBytesToInt64(buf, offset, length)), nil
+		}
+		return Buffer.VarBytesToInt64(buf, offset, length), nil
+
+	case ParticleType.STRING:
+		return string(buf[offset : offset+length]), nil
 
 	case ParticleType.FLOAT:
 		return Buffer.BytesToFloat64(buf, offset), nil
 
-	case ParticleType.STRING:
-		return string(buf[offset : offset+length]), nil
+	case ParticleType.MAP:
+		return newUnpacker(buf, offset, length).UnpackMap()
+
+	case ParticleType.LIST:
+		return newUnpacker(buf, offset, length).UnpackList()
+
+	case ParticleType.GEOJSON:
+		ncells := int(Buffer.BytesToInt16(buf, offset+1))
+		headerSize := 1 + 2 + (ncells * 8)
+		return string(buf[offset+headerSize : offset+length]), nil
 
 	case ParticleType.BLOB:
 		newObj := make([]byte, length)
 		copy(newObj, buf[offset:offset+length])
 		return newObj, nil
 
-	case ParticleType.LIST:
-		return newUnpacker(buf, offset, length).UnpackList()
-
-	case ParticleType.MAP:
-		return newUnpacker(buf, offset, length).UnpackMap()
-
 	case ParticleType.LDT:
 		return newUnpacker(buf, offset, length).unpackObjects()
 
-	case ParticleType.GEOJSON:
-		ncells := int(Buffer.BytesToInt16(buf, offset+1))
-		headerSize := 1 + 2 + (ncells * 8)
-		return string(buf[offset+headerSize : offset+length]), nil
 	}
 	return nil, nil
 }

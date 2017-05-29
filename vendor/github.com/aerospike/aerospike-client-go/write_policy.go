@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,17 @@
 // limitations under the License.
 
 package aerospike
+
+import "math"
+
+const (
+	// TTLServerDefault will default to namespace configuration variable "default-ttl" on the server.
+	TTLServerDefault = 0
+	// TTLDontExpire will never expire for Aerospike 2 server versions >= 2.7.2 and Aerospike 3 server.
+	TTLDontExpire = math.MaxUint32
+	// TTLDontUpdate will not change the record's ttl when record is written. Supported by Aerospike server versions >= 3.10.1
+	TTLDontUpdate = math.MaxUint32 - 1
+)
 
 // WritePolicy encapsulates parameters for policy attributes used in write operations.
 // This object is passed into methods where database writes can occur.
@@ -40,9 +51,9 @@ type WritePolicy struct {
 	// Expiration determines record expiration in seconds. Also known as TTL (Time-To-Live).
 	// Seconds record will live before being removed by the server.
 	// Expiration values:
-	// MaxUint32: Never expire for Aerospike 2 server versions >= 2.7.2 and Aerospike 3 server
-	// versions >= 3.1.4.  Do not use -1 for older servers.
-	// 0: Default to namespace configuration variable "default-ttl" on the server.
+	// TTLServerDefault (0): Default to namespace configuration variable "default-ttl" on the server.
+	// TTLDontExpire (MaxUint32): Never expire for Aerospike 2 server versions >= 2.7.2 and Aerospike 3 server
+	// TTLDontUpdate (MaxUint32 - 1): Do not change ttl when record is written. Supported by Aerospike server versions >= 3.10.1
 	// > 0: Actual expiration in seconds.
 	Expiration uint32
 

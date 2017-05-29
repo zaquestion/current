@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"log"
 	"os"
 
@@ -9,7 +10,8 @@ import (
 )
 
 var (
-	db *as.Client
+	key *as.Key
+	db  *as.Client
 )
 
 func DBInit() {
@@ -20,25 +22,26 @@ func DBInit() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	k, err := as.NewKey("current", "", "loc")
+	if err != nil {
+		log.Fatal(err)
+	}
+	key = k
 }
 
 func PutLocation(loc pb.Location) error {
-	k, err := as.NewKey("locations", "zaq", "latest")
-	if err != nil {
-		return err
+	if key == nil {
+		return errors.New("DBInit not called")
 	}
-
-	err = db.PutObject(nil, k, &loc)
-	return err
+	return db.PutObject(nil, key, &loc)
 }
 
 func GetLocation() (*pb.Location, error) {
-	k, err := as.NewKey("locations", "zaq", "latest")
-	if err != nil {
-		return nil, err
+	if key == nil {
+		return nil, errors.New("DBInit not called")
 	}
-
 	var loc pb.Location
-	err = db.GetObject(nil, k, &loc)
+	err := db.GetObject(nil, key, &loc)
 	return &loc, err
 }

@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,13 +15,13 @@
 package aerospike
 
 type executeCommand struct {
-	*readCommand
+	readCommand
 
 	// overwrite
 	policy       *WritePolicy
 	packageName  string
 	functionName string
-	args         []Value
+	args         *ValueArray
 }
 
 func newExecuteCommand(
@@ -30,9 +30,9 @@ func newExecuteCommand(
 	key *Key,
 	packageName string,
 	functionName string,
-	args []Value,
-) *executeCommand {
-	return &executeCommand{
+	args *ValueArray,
+) executeCommand {
+	return executeCommand{
 		readCommand:  newReadCommand(cluster, &policy.BasePolicy, key, nil),
 		policy:       policy,
 		packageName:  packageName,
@@ -46,7 +46,7 @@ func (cmd *executeCommand) writeBuffer(ifc command) error {
 }
 
 func (cmd *executeCommand) getNode(ifc command) (*Node, error) {
-	return cmd.cluster.getMasterNode(cmd.partition)
+	return cmd.cluster.getMasterNode(&cmd.partition)
 }
 
 func (cmd *executeCommand) Execute() error {

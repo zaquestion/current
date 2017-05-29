@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,13 +16,14 @@ package aerospike
 
 import (
 	"bytes"
+	"reflect"
 
 	. "github.com/aerospike/aerospike-client-go/types"
 	Buffer "github.com/aerospike/aerospike-client-go/utils/buffer"
 )
 
 type batchCommandGet struct {
-	*baseMultiCommand
+	baseMultiCommand
 
 	batchNamespace *batchNamespace
 	policy         *BasePolicy
@@ -31,7 +32,22 @@ type batchCommandGet struct {
 	records        []*Record
 	readAttr       int
 	index          int
+
+	// pointer to the object that's going to be unmarshalled
+	objects      []*reflect.Value
+	objectsFound []bool
 }
+
+// this method uses reflection.
+// Will not be set if performance flag is passed for the build.
+var batchObjectParser func(
+	cmd *batchCommandGet,
+	offset int,
+	opCount int,
+	fieldCount int,
+	generation uint32,
+	expiration uint32,
+) error
 
 func newBatchCommandGet(
 	node *Node,
@@ -42,8 +58,8 @@ func newBatchCommandGet(
 	records []*Record,
 	readAttr int,
 ) *batchCommandGet {
-	return &batchCommandGet{
-		baseMultiCommand: newMultiCommand(node, nil),
+	res := &batchCommandGet{
+		baseMultiCommand: *newMultiCommand(node, nil),
 		batchNamespace:   batchNamespace,
 		policy:           policy,
 		keys:             keys,
@@ -51,6 +67,8 @@ func newBatchCommandGet(
 		records:          records,
 		readAttr:         readAttr,
 	}
+	res.oneShot = false
+	return res
 }
 
 func (cmd *batchCommandGet) getPolicy(ifc command) Policy {
@@ -98,14 +116,22 @@ func (cmd *batchCommandGet) parseRecordResults(ifc command, receiveSize int) (bo
 		offset := cmd.batchNamespace.offsets[cmd.index] //cmd.keyMap[string(key.digest)]
 		cmd.index++
 
-		if bytes.Equal(key.digest, cmd.keys[offset].digest) {
+		if bytes.Equal(key.digest[:], cmd.keys[offset].digest[:]) {
 			if resultCode == 0 {
-				if cmd.records[offset], err = cmd.parseRecord(key, opCount, generation, expiration); err != nil {
-					return false, err
+				if cmd.objects == nil {
+					if cmd.records[offset], err = cmd.parseRecord(key, opCount, generation, expiration); err != nil {
+						return false, err
+					}
+				} else if batchObjectParser != nil {
+					// mark it as found
+					cmd.objectsFound[offset] = true
+					if err := batchObjectParser(cmd, offset, opCount, fieldCount, generation, expiration); err != nil {
+						return false, err
+					}
 				}
 			}
 		} else {
-			return false, NewAerospikeError(PARSE_ERROR, "Unexpected batch key returned: "+string(key.namespace)+","+Buffer.BytesToHexString(key.digest))
+			return false, NewAerospikeError(PARSE_ERROR, "Unexpected batch key returned: "+string(key.namespace)+","+Buffer.BytesToHexString(key.digest[:]))
 		}
 	}
 	return true, nil

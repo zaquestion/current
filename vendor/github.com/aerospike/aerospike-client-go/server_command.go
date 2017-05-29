@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,12 +23,12 @@ import (
 )
 
 type serverCommand struct {
-	*queryCommand
+	queryCommand
 }
 
 func newServerCommand(node *Node, policy *QueryPolicy, statement *Statement) *serverCommand {
 	return &serverCommand{
-		queryCommand: newQueryCommand(node, policy, statement, nil),
+		queryCommand: *newQueryCommand(node, policy, statement, nil),
 	}
 }
 

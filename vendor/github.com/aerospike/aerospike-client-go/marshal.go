@@ -1,4 +1,6 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// +build !as_performance
+
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,13 +23,23 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	. "github.com/aerospike/aerospike-client-go/types"
 )
 
+var aerospikeTag = "as"
+
 const (
-	aerospikeTag     = "as"
 	aerospikeMetaTag = "asm"
 	keyTag           = "key"
 )
+
+// SetAerospikeTag sets the bin tag to the specified tag.
+// This will be useful for when a user wants to use the same tag name for two different concerns.
+// For example, one will be able to use the same tag name for both json and aerospike bin name.
+func SetAerospikeTag(tag string) {
+	aerospikeTag = tag
+}
 
 func valueToInterface(f reflect.Value, clusterSupportsFloat bool) interface{} {
 	// get to the core value
@@ -46,9 +58,9 @@ func valueToInterface(f reflect.Value, clusterSupportsFloat bool) interface{} {
 		// server doesn't support floats
 		if clusterSupportsFloat {
 			return f.Float()
-		} else {
-			return int(math.Float64bits(f.Float()))
 		}
+		return int(math.Float64bits(f.Float()))
+
 	case reflect.Struct:
 		if f.Type().PkgPath() == "time" && f.Type().Name() == "Time" {
 			return f.Interface().(time.Time).UTC().UnixNano()
@@ -74,13 +86,15 @@ func valueToInterface(f reflect.Value, clusterSupportsFloat bool) interface{} {
 		if f.Kind() == reflect.Slice && f.IsNil() {
 			return nil
 		}
-
+		if f.Kind() == reflect.Slice && reflect.TypeOf(f.Interface()).Elem().Kind() == reflect.Uint8 {
+			// handle blobs
+			return f.Interface().([]byte)
+		}
 		// convert to primitives recursively
 		newSlice := make([]interface{}, f.Len(), f.Cap())
 		for i := 0; i < len(newSlice); i++ {
 			newSlice[i] = valueToInterface(f.Index(i), clusterSupportsFloat)
 		}
-
 		return newSlice
 	case reflect.Interface:
 		if f.IsNil() {
@@ -149,8 +163,7 @@ func structToMap(s reflect.Value, clusterSupportsFloat bool) map[string]interfac
 }
 
 func marshal(v interface{}, clusterSupportsFloat bool) []*Bin {
-	s := indirect(reflect.ValueOf(v).Elem())
-
+	s := indirect(reflect.ValueOf(v))
 	numFields := s.NumField()
 	bins := binPool.Get(numFields).([]*Bin)
 
@@ -188,7 +201,7 @@ func indirect(obj reflect.Value) reflect.Value {
 		if obj.IsNil() {
 			return obj
 		}
-		obj = reflect.Indirect(obj)
+		obj = obj.Elem()
 	}
 	return obj
 }
@@ -296,4 +309,33 @@ func cacheObjectTags(objType reflect.Type) {
 	}
 
 	objectMappings.setMapping(objType, mapping, fields, ttl, gen)
+}
+
+func binMapToBins(bins []*Bin, binMap BinMap) []*Bin {
+	i := 0
+	for k, v := range binMap {
+		bins[i].Name = k
+		bins[i].Value = NewValue(v)
+		i++
+	}
+
+	return bins
+}
+
+// pool Bins so that we won't have to allocate them every time
+var binPool = NewPool(512)
+
+func init() {
+	binPool.New = func(params ...interface{}) interface{} {
+		size := params[0].(int)
+		bins := make([]*Bin, size, size)
+		for i := range bins {
+			bins[i] = &Bin{}
+		}
+		return bins
+	}
+
+	binPool.IsUsable = func(obj interface{}, params ...interface{}) bool {
+		return len(obj.([]*Bin)) >= params[0].(int)
+	}
 }

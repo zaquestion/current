@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,14 +15,14 @@
 package aerospike
 
 type operateCommand struct {
-	*readCommand
+	readCommand
 
 	policy     *WritePolicy
 	operations []*Operation
 }
 
-func newOperateCommand(cluster *Cluster, policy *WritePolicy, key *Key, operations []*Operation) *operateCommand {
-	return &operateCommand{
+func newOperateCommand(cluster *Cluster, policy *WritePolicy, key *Key, operations []*Operation) operateCommand {
+	return operateCommand{
 		readCommand: newReadCommand(cluster, &policy.BasePolicy, key, nil),
 		policy:      policy,
 		operations:  operations,
@@ -34,7 +34,7 @@ func (cmd *operateCommand) writeBuffer(ifc command) error {
 }
 
 func (cmd *operateCommand) getNode(ifc command) (*Node, error) {
-	return cmd.cluster.getMasterNode(cmd.partition)
+	return cmd.cluster.getMasterNode(&cmd.partition)
 }
 
 func (cmd *operateCommand) Execute() error {

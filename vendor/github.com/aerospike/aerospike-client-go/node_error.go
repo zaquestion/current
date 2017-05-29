@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,3 +41,6 @@ func newAerospikeNodeError(node *Node, code ResultCode, messages ...string) *Nod
 
 // Node returns the node where the error occurred.
 func (ne *NodeError) Node() *Node { return ne.node }
+
+// Err returns the error
+func (ne *NodeError) Err() error { return ne.error }

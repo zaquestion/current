@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,10 @@
 
 package aerospike
 
-import . "github.com/aerospike/aerospike-client-go/types"
+import (
+	. "github.com/aerospike/aerospike-client-go/types"
+	Buffer "github.com/aerospike/aerospike-client-go/utils/buffer"
+)
 
 // guarantee writeCommand implements command interface
 var _ command = &writeCommand{}
@@ -24,6 +27,7 @@ type writeCommand struct {
 
 	policy    *WritePolicy
 	bins      []*Bin
+	binMap    BinMap
 	operation OperationType
 }
 
@@ -31,12 +35,14 @@ func newWriteCommand(cluster *Cluster,
 	policy *WritePolicy,
 	key *Key,
 	bins []*Bin,
+	binMap BinMap,
 	operation OperationType) *writeCommand {
 
 	newWriteCmd := &writeCommand{
-		singleCommand: *newSingleCommand(cluster, key),
+		singleCommand: newSingleCommand(cluster, key),
 		policy:        policy,
 		bins:          bins,
+		binMap:        binMap,
 		operation:     operation,
 	}
 
@@ -48,16 +54,23 @@ func (cmd *writeCommand) getPolicy(ifc command) Policy {
 }
 
 func (cmd *writeCommand) writeBuffer(ifc command) error {
-	return cmd.setWrite(cmd.policy, cmd.operation, cmd.key, cmd.bins)
+	return cmd.setWrite(cmd.policy, cmd.operation, cmd.key, cmd.bins, cmd.binMap)
 }
 
 func (cmd *writeCommand) getNode(ifc command) (*Node, error) {
-	return cmd.cluster.getMasterNode(cmd.partition)
+	return cmd.cluster.getMasterNode(&cmd.partition)
 }
 
 func (cmd *writeCommand) parseResult(ifc command, conn *Connection) error {
 	// Read header.
 	if _, err := conn.Read(cmd.dataBuffer, int(_MSG_TOTAL_HEADER_SIZE)); err != nil {
+		return err
+	}
+
+	header := Buffer.BytesToInt64(cmd.dataBuffer, 0)
+
+	// Validate header to make sure we are at the beginning of a message
+	if err := cmd.validateHeader(header); err != nil {
 		return err
 	}
 

@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import . "github.com/aerospike/aerospike-client-go/types"
 // . "github.com/aerospike/aerospike-client-go/types/atomic"
 
 type scanObjectsCommand struct {
-	*baseMultiCommand
+	baseMultiCommand
 
 	policy    *ScanPolicy
 	namespace string
@@ -38,7 +38,7 @@ func newScanObjectsCommand(
 	taskId uint64,
 ) *scanObjectsCommand {
 	cmd := &scanObjectsCommand{
-		baseMultiCommand: newMultiCommand(node, recordset),
+		baseMultiCommand: *newMultiCommand(node, recordset),
 		policy:           policy,
 		namespace:        namespace,
 		setName:          setName,
@@ -65,5 +65,9 @@ func (cmd *scanObjectsCommand) parseResult(ifc command, conn *Connection) error 
 
 func (cmd *scanObjectsCommand) Execute() error {
 	defer cmd.recordset.signalEnd()
-	return cmd.execute(cmd)
+	err := cmd.execute(cmd)
+	if err != nil {
+		cmd.recordset.sendError(err)
+	}
+	return err
 }

@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Aerospike, Inc.
+// Copyright 2013-2017 Aerospike, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 
 // IndexTask is used to poll for long running create index completion.
 type IndexTask struct {
-	*BaseTask
+	*baseTask
 
 	namespace string
 	indexName string
@@ -31,7 +31,7 @@ type IndexTask struct {
 // NewIndexTask initializes a task with fields needed to query server nodes.
 func NewIndexTask(cluster *Cluster, namespace string, indexName string) *IndexTask {
 	return &IndexTask{
-		BaseTask:  NewTask(cluster, false),
+		baseTask:  newTask(cluster, false),
 		namespace: namespace,
 		indexName: indexName,
 	}
@@ -46,7 +46,7 @@ func (tski *IndexTask) IsDone() (bool, error) {
 	r := regexp.MustCompile(`\.*load_pct=(\d+)\.*`)
 
 	for _, node := range nodes {
-		responseMap, err := RequestNodeInfo(node, command)
+		responseMap, err := node.RequestInfo(command)
 		if err != nil {
 			return false, err
 		}

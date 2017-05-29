@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 )
 
 func intMin(a, b int) int {
@@ -100,7 +102,7 @@ func (fs *flagScanner) Next() (byte, bool) {
 var cDateFlagToGo = map[byte]string{
 	'a': "mon", 'A': "Monday", 'b': "Jan", 'B': "January", 'c': "02 Jan 06 15:04 MST", 'd': "02",
 	'F': "2006-01-02", 'H': "15", 'I': "03", 'm': "01", 'M': "04", 'p': "PM", 'P': "pm", 'S': "05",
-	'x': "15/04/05", 'X': "15:04:05",'y': "06", 'Y': "2006", 'z': "-0700", 'Z': "MST"}
+	'x': "15/04/05", 'X': "15:04:05", 'y': "06", 'Y': "2006", 'z': "-0700", 'Z': "MST"}
 
 func strftime(t time.Time, cfmt string) string {
 	sc := newFlagScanner('%', "", "", cfmt)
@@ -251,4 +253,10 @@ func strCmp(s1, s2 string) int {
 			return 0
 		}
 	}
+}
+
+func unsafeFastStringToReadOnlyBytes(s string) []byte {
+	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	bh := reflect.SliceHeader{sh.Data, sh.Len, sh.Len}
+	return *(*[]byte)(unsafe.Pointer(&bh))
 }
