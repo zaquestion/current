@@ -28,7 +28,7 @@ func PutLocation(loc pb.Location) error {
 		return err
 	}
 
-	err = db.PutObject(nil, k, loc)
+	err = db.PutObject(nil, k, &loc)
 	return err
 }
 
