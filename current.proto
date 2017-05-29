@@ -2,24 +2,28 @@ syntax = "proto3";
 
 package current;
 
-import "google/api/annotations.proto";
+import "github.com/TuneLab/go-truss/deftree/googlethirdparty/annotations.proto";
 
-service CurrentService {
-  rpc PostLocationFromBigBrother (PostLocationFromBigBrotherRequest) returns (PostLocationFromBigBrotherReply) {
+service Current {
+  rpc PostLocationBigBrother (PostLocationBigBrotherRequest) returns (Error) {
     option (google.api.http) = {
-      get: "/location/bigbrother"
+      post: "/location/bigbrother"
     };
   }
-
-
-  rpc GetLocation (GetLocationRequest) returns (GetLocationReply) {
+  rpc PostLocationTasker (PostLocationTaskerRequest) returns (Error) {
+    option (google.api.http) = {
+      post: "/location/tasker"
+      body: "*"
+    };
+  }
+  rpc GetLocation (GetLocationRequest) returns (Location) {
     option (google.api.http) = {
       get: "/location"
     };
   }
 }
 
-message PostLocationFromBigBrotherRequest {
+message PostLocationBigBrotherRequest {
   double latitude  = 1;
   double longitude = 2;
   double accuracy  = 3;
@@ -30,14 +34,20 @@ message PostLocationFromBigBrotherRequest {
   string time      = 8;
 }
 
-message PostLocationFromBigBrotherReply {
+message PostLocationTaskerRequest {
+  repeated double location = 1;
+  int32  battery = 2;
+  string time    = 3;
+}
+
+message Error {
   string err = 1;
 }
 
 message GetLocationRequest {
 }
 
-message GetLocationReply {
+message Location {
   double latitude          = 1;
   double longitude         = 2;
   int32  battery_remaining = 3;

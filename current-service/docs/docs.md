@@ -1,3 +1,103 @@
+# current
+
+## current.proto
+
+### Messages
+
+<a name="PostLocationBigBrotherRequest"></a>
+
+#### PostLocationBigBrotherRequest
+
+| Name | Type | Field Number | Description|
+| ---- | ---- | ------------ | -----------|
+| latitude | TYPE_DOUBLE | 1 |  |
+| longitude | TYPE_DOUBLE | 2 |  |
+| accuracy | TYPE_DOUBLE | 3 |  |
+| altitude | TYPE_DOUBLE | 4 |  |
+| bearing | TYPE_DOUBLE | 5 |  |
+| speed | TYPE_DOUBLE | 6 |  |
+| battlevel | TYPE_INT32 | 7 |  |
+| time | TYPE_STRING | 8 |  |
+
+<a name="PostLocationTaskerRequest"></a>
+
+#### PostLocationTaskerRequest
+
+| Name | Type | Field Number | Description|
+| ---- | ---- | ------------ | -----------|
+| location | TYPE_DOUBLE | 1 |  |
+| battery | TYPE_INT32 | 2 |  |
+| time | TYPE_STRING | 3 |  |
+
+<a name="Error"></a>
+
+#### Error
+
+| Name | Type | Field Number | Description|
+| ---- | ---- | ------------ | -----------|
+| err | TYPE_STRING | 1 |  |
+
+<a name="GetLocationRequest"></a>
+
+#### GetLocationRequest
+
+
+<a name="Location"></a>
+
+#### Location
+
+| Name | Type | Field Number | Description|
+| ---- | ---- | ------------ | -----------|
+| latitude | TYPE_DOUBLE | 1 |  |
+| longitude | TYPE_DOUBLE | 2 |  |
+| battery_remaining | TYPE_INT32 | 3 |  |
+| last_updated | TYPE_STRING | 4 |  |
+| err | TYPE_STRING | 5 |  |
+
+### Services
+
+#### Current
+
+| Method Name | Request Type | Response Type | Description|
+| ---- | ---- | ------------ | -----------|
+| PostLocationBigBrother | PostLocationBigBrotherRequest | Error |  |
+| PostLocationTasker | PostLocationTaskerRequest | Error |  |
+| GetLocation | GetLocationRequest | Location |  |
+
+#### Current - Http Methods
+
+##### POST `/location/bigbrother`
+
+
+
+| Parameter Name | Location | Type |
+| ---- | ---- | ------------ |
+| latitude | query | TYPE_DOUBLE |
+| longitude | query | TYPE_DOUBLE |
+| accuracy | query | TYPE_DOUBLE |
+| altitude | query | TYPE_DOUBLE |
+| bearing | query | TYPE_DOUBLE |
+| speed | query | TYPE_DOUBLE |
+| battlevel | query | TYPE_INT32 |
+| time | query | TYPE_STRING |
+
+##### POST `/location/tasker`
+
+
+
+| Parameter Name | Location | Type |
+| ---- | ---- | ------------ |
+| location | body | TYPE_DOUBLE |
+| battery | body | TYPE_INT32 |
+| time | body | TYPE_STRING |
+
+##### GET `/location`
+
+
+
+| Parameter Name | Location | Type |
+| ---- | ---- | ------------ |
+
 
 <style type="text/css">
 
@@ -81,82 +181,3 @@ th:nth-child(4) {
 }
 
 </style>
-# current
-
-## current.proto
-
-### Messages
-
-<a name="PostLocationFromBigBrotherRequest"></a>
-
-#### PostLocationFromBigBrotherRequest
-
-| Name | Type | Field Number | Description|
-| ---- | ---- | ------------ | -----------|
-| latitude | TYPE_DOUBLE | 1 |  |
-| longitude | TYPE_DOUBLE | 2 |  |
-| accuracy | TYPE_DOUBLE | 3 |  |
-| altitude | TYPE_DOUBLE | 4 |  |
-| bearing | TYPE_DOUBLE | 5 |  |
-| speed | TYPE_DOUBLE | 6 |  |
-| battlevel | TYPE_INT32 | 7 |  |
-| time | TYPE_STRING | 8 |  |
-
-<a name="PostLocationFromBigBrotherReply"></a>
-
-#### PostLocationFromBigBrotherReply
-
-| Name | Type | Field Number | Description|
-| ---- | ---- | ------------ | -----------|
-| err | TYPE_STRING | 1 |  |
-
-<a name="GetLocationRequest"></a>
-
-#### GetLocationRequest
-
-
-<a name="GetLocationReply"></a>
-
-#### GetLocationReply
-
-| Name | Type | Field Number | Description|
-| ---- | ---- | ------------ | -----------|
-| latitude | TYPE_DOUBLE | 1 |  |
-| longitude | TYPE_DOUBLE | 2 |  |
-| battery_remaining | TYPE_INT32 | 3 |  |
-| last_updated | TYPE_STRING | 4 |  |
-| err | TYPE_STRING | 5 |  |
-
-### Services
-
-#### CurrentService
-
-| Method Name | Request Type | Response Type | Description|
-| ---- | ---- | ------------ | -----------|
-| PostLocationFromBigBrother | PostLocationFromBigBrotherRequest | PostLocationFromBigBrotherReply |  |
-| GetLocation | GetLocationRequest | GetLocationReply |  |
-
-#### CurrentService - Http Methods
-
-##### GET `/location/bigbrother`
-
-
-
-| Parameter Name | Location | Type |
-| ---- | ---- | ------------ |
-| latitude | query | TYPE_DOUBLE |
-| longitude | query | TYPE_DOUBLE |
-| accuracy | query | TYPE_DOUBLE |
-| altitude | query | TYPE_DOUBLE |
-| bearing | query | TYPE_DOUBLE |
-| speed | query | TYPE_DOUBLE |
-| battlevel | query | TYPE_INT32 |
-| time | query | TYPE_STRING |
-
-##### GET `/location`
-
-
-
-| Parameter Name | Location | Type |
-| ---- | ---- | ------------ |
-

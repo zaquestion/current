@@ -22,23 +22,23 @@ func DBInit() {
 	}
 }
 
-func PostLocationFromBigBrother(in *pb.PostLocationFromBigBrotherRequest) error {
+func PutLocation(loc pb.Location) error {
 	k, err := as.NewKey("locations", "zaq", "latest")
 	if err != nil {
 		return err
 	}
 
-	err = db.PutObject(nil, k, in)
+	err = db.PutObject(nil, k, loc)
 	return err
 }
 
-func GetLocation() (*pb.PostLocationFromBigBrotherRequest, error) {
+func GetLocation() (*pb.Location, error) {
 	k, err := as.NewKey("locations", "zaq", "latest")
 	if err != nil {
 		return nil, err
 	}
 
-	var out pb.PostLocationFromBigBrotherRequest
-	err = db.GetObject(nil, k, &out)
-	return &out, err
+	var loc pb.Location
+	err = db.GetObject(nil, k, &loc)
+	return &loc, err
 }
