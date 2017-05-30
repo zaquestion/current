@@ -43,7 +43,7 @@ func (s currentService) PostLocationTasker(ctx context.Context, in *pb.PostLocat
 		response.Err = err.Error()
 		return &response, err
 	}
-	datetime, err := time.Parse("01-02-06 15.05", in.DateTime)
+	datetime, err := time.Parse("1-2-06 15.05", in.DateTime)
 	if err != nil {
 		response.Err = err.Error()
 		return &response, err
