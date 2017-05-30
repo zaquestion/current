@@ -53,7 +53,7 @@ func (s currentService) PostLocationTasker(ctx context.Context, in *pb.PostLocat
 		Longitude:   in.Location[1],
 		Charging:    in.Charging,
 		Speed:       in.Speed,
-		LastUpdated: datetime.Format("2006-01-02T15:04:05.00Z"),
+		LastUpdated: datetime.UTC().Format("2006-01-02T15:04:05.00Z"),
 		Battery:     in.Battery,
 	}
 	err = internal.PutLocation(loc)
