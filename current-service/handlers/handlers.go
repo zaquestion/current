@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/bradfitz/latlong"
 	"golang.org/x/net/context"
 
 	pb "github.com/zaquestion/current/current-service"
@@ -43,14 +44,22 @@ func (s currentService) PostLocationTasker(ctx context.Context, in *pb.PostLocat
 		response.Err = err.Error()
 		return &response, err
 	}
-	datetime, err := time.Parse("1-2-06 15.05", in.DateTime)
+	lat := in.Location[0]
+	long := in.Location[1]
+	zone, err := time.LoadLocation(latlong.LookupZoneName(lat, long))
+	if err != nil {
+		response.Err = err.Error()
+		return &response, err
+	}
+
+	datetime, err := time.ParseInLocation("1-2-06 15.05", in.DateTime, zone)
 	if err != nil {
 		response.Err = err.Error()
 		return &response, err
 	}
 	loc := pb.Location{
-		Latitude:    in.Location[0],
-		Longitude:   in.Location[1],
+		Latitude:    lat,
+		Longitude:   long,
 		Charging:    in.Charging,
 		Speed:       in.Speed,
 		LastUpdated: datetime.UTC().Format("2006-01-02T15:04:05.00Z"),

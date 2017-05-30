@@ -81,6 +81,12 @@
 			"revisionTime": "2017-04-28T13:56:54Z"
 		},
 		{
+			"checksumSHA1": "AeAFaDs6ibjgyQhmuFq95g/zsBs=",
+			"path": "github.com/bradfitz/latlong",
+			"revision": "f3db6d0dff40d47957be82e1a6645574fb041f95",
+			"revisionTime": "2017-04-10T18:09:02Z"
+		},
+		{
 			"checksumSHA1": "N36ww5Gg5pA6TM52vlqKhiSaRv4=",
 			"path": "github.com/go-kit/kit/endpoint",
 			"revision": "2306574795995d5c1dd3db976ae7d44f77d90c19",
