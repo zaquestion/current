@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -42,15 +43,20 @@ func (s currentService) PostLocationTasker(ctx context.Context, in *pb.PostLocat
 		response.Err = err.Error()
 		return &response, err
 	}
+	datetime, err := time.Parse("01-02-06 15.05", in.DateTime)
+	if err != nil {
+		response.Err = err.Error()
+		return &response, err
+	}
 	loc := pb.Location{
 		Latitude:    in.Location[0],
 		Longitude:   in.Location[1],
 		Charging:    in.Charging,
 		Speed:       in.Speed,
-		LastUpdated: in.Time,
+		LastUpdated: datetime.Format("2006-01-02T15:04:05.00Z"),
 		Battery:     in.Battery,
 	}
-	err := internal.PutLocation(loc)
+	err = internal.PutLocation(loc)
 	if err != nil {
 		response.Err = err.Error()
 	}

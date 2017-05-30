@@ -36,10 +36,10 @@ message PostLocationBigBrotherRequest {
 
 message PostLocationTaskerRequest {
   repeated double location = 1;
-  double speed    = 2;
-  int32  battery  = 3;
-  bool   charging = 4;
-  string time     = 5;
+  double speed     = 2;
+  int32  battery   = 3;
+  bool   charging  = 4;
+  string date_time = 5;
 }
 
 message Error {

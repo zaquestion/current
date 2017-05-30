@@ -283,7 +283,7 @@ func EncodeHTTPPostLocationTaskerZeroRequest(_ context.Context, r *http.Request,
 
 	toRet.Charging = req.Charging
 
-	toRet.Time = req.Time
+	toRet.DateTime = req.DateTime
 
 	if err := json.NewEncoder(&buf).Encode(toRet); err != nil {
 		return errors.Wrapf(err, "couldn't encode body as json %v", toRet)

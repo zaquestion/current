@@ -93,7 +93,7 @@ func submain() int {
 		flagSpeedPostLocationTasker         = fsPostLocationTasker.Float64("speed", 0.0, "")
 		flagBatteryPostLocationTasker       = fsPostLocationTasker.Int("battery", 0, "")
 		flagChargingPostLocationTasker      = fsPostLocationTasker.Bool("charging", false, "")
-		flagTimePostLocationTasker          = fsPostLocationTasker.String("time", "", "")
+		flagDateTimePostLocationTasker      = fsPostLocationTasker.String("datetime", "", "")
 	)
 
 	flag.Usage = func() {
@@ -210,9 +210,9 @@ func submain() int {
 		SpeedPostLocationTasker := *flagSpeedPostLocationTasker
 		BatteryPostLocationTasker := int32(*flagBatteryPostLocationTasker)
 		ChargingPostLocationTasker := *flagChargingPostLocationTasker
-		TimePostLocationTasker := *flagTimePostLocationTasker
+		DateTimePostLocationTasker := *flagDateTimePostLocationTasker
 
-		request, err := handlers.PostLocationTasker(LocationPostLocationTasker, SpeedPostLocationTasker, BatteryPostLocationTasker, ChargingPostLocationTasker, TimePostLocationTasker)
+		request, err := handlers.PostLocationTasker(LocationPostLocationTasker, SpeedPostLocationTasker, BatteryPostLocationTasker, ChargingPostLocationTasker, DateTimePostLocationTasker)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error calling handlers.PostLocationTasker: %v\n", err)
 			return 1
@@ -224,7 +224,7 @@ func submain() int {
 			return 1
 		}
 		fmt.Println("Client Requested with:")
-		fmt.Println(LocationPostLocationTasker, SpeedPostLocationTasker, BatteryPostLocationTasker, ChargingPostLocationTasker, TimePostLocationTasker)
+		fmt.Println(LocationPostLocationTasker, SpeedPostLocationTasker, BatteryPostLocationTasker, ChargingPostLocationTasker, DateTimePostLocationTasker)
 		fmt.Println("Server Responded with:")
 		fmt.Println(v)
 

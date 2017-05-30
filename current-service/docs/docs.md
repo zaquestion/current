@@ -29,7 +29,7 @@
 | speed | TYPE_DOUBLE | 2 |  |
 | battery | TYPE_INT32 | 3 |  |
 | charging | TYPE_BOOL | 4 |  |
-| time | TYPE_STRING | 5 |  |
+| date_time | TYPE_STRING | 5 |  |
 
 <a name="Error"></a>
 
@@ -95,7 +95,7 @@
 | speed | body | TYPE_DOUBLE |
 | battery | body | TYPE_INT32 |
 | charging | body | TYPE_BOOL |
-| time | body | TYPE_STRING |
+| date_time | body | TYPE_STRING |
 
 ##### GET `/location`
 
