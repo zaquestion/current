@@ -1,6 +1,9 @@
 package http
 
 import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 
@@ -82,11 +85,11 @@ func (c Client) Endpoint() endpoint.Endpoint {
 
 		req, err := http.NewRequest(c.method, c.tgt.String(), nil)
 		if err != nil {
-			return nil, Error{Domain: DomainNewRequest, Err: err}
+			return nil, err
 		}
 
 		if err = c.enc(ctx, req, request); err != nil {
-			return nil, Error{Domain: DomainEncode, Err: err}
+			return nil, err
 		}
 
 		for _, f := range c.before {
@@ -95,7 +98,7 @@ func (c Client) Endpoint() endpoint.Endpoint {
 
 		resp, err := ctxhttp.Do(ctx, c.client, req)
 		if err != nil {
-			return nil, Error{Domain: DomainDo, Err: err}
+			return nil, err
 		}
 		if !c.bufferedStream {
 			defer resp.Body.Close()
@@ -107,9 +110,25 @@ func (c Client) Endpoint() endpoint.Endpoint {
 
 		response, err := c.dec(ctx, resp)
 		if err != nil {
-			return nil, Error{Domain: DomainDecode, Err: err}
+			return nil, err
 		}
 
 		return response, nil
 	}
+}
+
+// EncodeJSONRequest is an EncodeRequestFunc that serializes the request as a
+// JSON object to the Request body. Many JSON-over-HTTP services can use it as
+// a sensible default. If the request implements Headerer, the provided headers
+// will be applied to the request.
+func EncodeJSONRequest(c context.Context, r *http.Request, request interface{}) error {
+	r.Header.Set("Content-Type", "application/json; charset=utf-8")
+	if headerer, ok := request.(Headerer); ok {
+		for k := range headerer.Headers() {
+			r.Header.Set(k, headerer.Headers().Get(k))
+		}
+	}
+	var b bytes.Buffer
+	r.Body = ioutil.NopCloser(&b)
+	return json.NewEncoder(&b).Encode(request)
 }

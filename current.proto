@@ -2,15 +2,15 @@ syntax = "proto3";
 
 package current;
 
-import "github.com/TuneLab/go-truss/deftree/googlethirdparty/annotations.proto";
+import "github.com/TuneLab/truss/deftree/googlethirdparty/annotations.proto";
 
 service Current {
-  rpc PostLocationBigBrother (PostLocationBigBrotherRequest) returns (Error) {
+  rpc PostLocationBigBrother (PostLocationBigBrotherRequest) returns (Empty) {
     option (google.api.http) = {
       post: "/location/bigbrother"
     };
   }
-  rpc PostLocationTasker (PostLocationTaskerRequest) returns (Error) {
+  rpc PostLocationTasker (PostLocationTaskerRequest) returns (Empty) {
     option (google.api.http) = {
       post: "/location/tasker"
       body: "*"
@@ -40,13 +40,14 @@ message PostLocationTaskerRequest {
   int32  battery   = 3;
   bool   charging  = 4;
   string date_time = 5;
+  string secret    = 6;
 }
 
-message Error {
-  string err = 1;
+message Empty {
 }
 
 message GetLocationRequest {
+  string secret = 1;
 }
 
 message Location {
@@ -56,5 +57,4 @@ message Location {
   int32  battery           = 4;
   bool   charging          = 5;
   string last_updated      = 6;
-  string err               = 7;
 }

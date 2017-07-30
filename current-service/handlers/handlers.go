@@ -20,7 +20,9 @@ func NewService() pb.CurrentServer {
 type currentService struct{}
 
 // PostLocationBigBrother implements Service.
-func (s currentService) PostLocationBigBrother(ctx context.Context, in *pb.PostLocationBigBrotherRequest) (*pb.Error, error) {
+func (s currentService) PostLocationBigBrother(ctx context.Context, in *pb.PostLocationBigBrotherRequest) (*pb.Empty, error) {
+	return nil, errors.New("Currently unsupported")
+	response := pb.Empty{}
 	loc := pb.Location{
 		Latitude:    in.Latitude,
 		Longitude:   in.Longitude,
@@ -28,33 +30,26 @@ func (s currentService) PostLocationBigBrother(ctx context.Context, in *pb.PostL
 		LastUpdated: in.Time,
 		Battery:     in.Battlevel,
 	}
-	err := internal.PutLocation(loc)
-	response := pb.Error{}
-	if err != nil {
-		response.Err = err.Error()
-	}
-	return &response, nil
+	err := internal.PutLocation("", loc)
+	return &response, err
 }
 
 // PostLocationTasker implements Service.
-func (s currentService) PostLocationTasker(ctx context.Context, in *pb.PostLocationTaskerRequest) (*pb.Error, error) {
-	response := pb.Error{}
+func (s currentService) PostLocationTasker(ctx context.Context, in *pb.PostLocationTaskerRequest) (*pb.Empty, error) {
+	response := pb.Empty{}
 	if len(in.Location) < 2 {
 		err := errors.New("No location provided")
-		response.Err = err.Error()
 		return &response, err
 	}
 	lat := in.Location[0]
 	long := in.Location[1]
 	zone, err := time.LoadLocation(latlong.LookupZoneName(lat, long))
 	if err != nil {
-		response.Err = err.Error()
 		return &response, err
 	}
 
 	datetime, err := time.ParseInLocation("1-2-06 15.04", in.DateTime, zone)
 	if err != nil {
-		response.Err = err.Error()
 		return &response, err
 	}
 	loc := pb.Location{
@@ -65,18 +60,11 @@ func (s currentService) PostLocationTasker(ctx context.Context, in *pb.PostLocat
 		LastUpdated: datetime.UTC().Format("2006-01-02T15:04:05.00Z"),
 		Battery:     in.Battery,
 	}
-	err = internal.PutLocation(loc)
-	if err != nil {
-		response.Err = err.Error()
-	}
+	err = internal.PutLocation(in.Secret, loc)
 	return &response, err
 }
 
 // GetLocation implements Service.
 func (s currentService) GetLocation(ctx context.Context, in *pb.GetLocationRequest) (*pb.Location, error) {
-	loc, err := internal.GetLocation()
-	if err != nil {
-		loc.Err = err.Error()
-	}
-	return loc, err
+	return internal.GetLocation(in.Secret)
 }

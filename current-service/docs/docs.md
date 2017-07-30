@@ -30,19 +30,20 @@
 | battery | TYPE_INT32 | 3 |  |
 | charging | TYPE_BOOL | 4 |  |
 | date_time | TYPE_STRING | 5 |  |
+| secret | TYPE_STRING | 6 |  |
 
-<a name="Error"></a>
+<a name="Empty"></a>
 
-#### Error
+#### Empty
 
-| Name | Type | Field Number | Description|
-| ---- | ---- | ------------ | -----------|
-| err | TYPE_STRING | 1 |  |
 
 <a name="GetLocationRequest"></a>
 
 #### GetLocationRequest
 
+| Name | Type | Field Number | Description|
+| ---- | ---- | ------------ | -----------|
+| secret | TYPE_STRING | 1 |  |
 
 <a name="Location"></a>
 
@@ -56,7 +57,6 @@
 | battery | TYPE_INT32 | 4 |  |
 | charging | TYPE_BOOL | 5 |  |
 | last_updated | TYPE_STRING | 6 |  |
-| err | TYPE_STRING | 7 |  |
 
 ### Services
 
@@ -64,8 +64,8 @@
 
 | Method Name | Request Type | Response Type | Description|
 | ---- | ---- | ------------ | -----------|
-| PostLocationBigBrother | PostLocationBigBrotherRequest | Error |  |
-| PostLocationTasker | PostLocationTaskerRequest | Error |  |
+| PostLocationBigBrother | PostLocationBigBrotherRequest | Empty |  |
+| PostLocationTasker | PostLocationTaskerRequest | Empty |  |
 | GetLocation | GetLocationRequest | Location |  |
 
 #### Current - Http Methods
@@ -96,6 +96,7 @@
 | battery | body | TYPE_INT32 |
 | charging | body | TYPE_BOOL |
 | date_time | body | TYPE_STRING |
+| secret | body | TYPE_STRING |
 
 ##### GET `/location`
 
@@ -103,6 +104,7 @@
 
 | Parameter Name | Location | Type |
 | ---- | ---- | ------------ |
+| secret | query | TYPE_STRING |
 
 
 <style type="text/css">
